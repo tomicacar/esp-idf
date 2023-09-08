@@ -59,13 +59,41 @@ static esp_err_t httpd_accept_conn(struct httpd_data *hd, int listen_fd)
     tv.tv_usec = 0;
     setsockopt(new_fd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
 
+    if (hd->config.keep_alive_enable) {
+        int keep_alive_enable = 1;
+        int keep_alive_idle = hd->config.keep_alive_idle ? hd->config.keep_alive_idle : 5;
+        int keep_alive_interval = hd->config.keep_alive_interval ? hd->config.keep_alive_interval : 5;
+        int keep_alive_count = hd->config.keep_alive_count ? hd->config.keep_alive_count : 3;
+        ESP_LOGD(TAG, "Enable TCP keep alive. idle: %d, interval: %d, count: %d", keep_alive_idle, keep_alive_interval, keep_alive_count);
+
+        if (setsockopt(new_fd, SOL_SOCKET, SO_KEEPALIVE, &keep_alive_enable, sizeof(keep_alive_enable)) < 0) {
+            ESP_LOGW(TAG, LOG_FMT("error enabling SO_KEEPALIVE (%d)"), errno);
+            goto exit;
+        }
+        if (setsockopt(new_fd, IPPROTO_TCP, TCP_KEEPIDLE, &keep_alive_idle, sizeof(keep_alive_idle)) < 0) {
+            ESP_LOGW(TAG, LOG_FMT("error set TCP_KEEPIDLE (%d)"), errno);
+            goto exit;
+        }
+        if (setsockopt(new_fd, IPPROTO_TCP, TCP_KEEPINTVL, &keep_alive_interval, sizeof(keep_alive_interval)) < 0) {
+            ESP_LOGW(TAG, LOG_FMT("error set TCP_KEEPINTVL (%d)"), errno);
+            goto exit;
+        }
+        if (setsockopt(new_fd, IPPROTO_TCP, TCP_KEEPCNT, &keep_alive_count, sizeof(keep_alive_count)) < 0) {
+            ESP_LOGW(TAG, LOG_FMT("error set TCP_KEEPCNT (%d)"), errno);
+            goto exit;
+        }
+    }
+
     if (ESP_OK != httpd_sess_new(hd, new_fd)) {
         ESP_LOGW(TAG, LOG_FMT("session creation failed"));
-        close(new_fd);
-        return ESP_FAIL;
+        goto exit;
     }
     ESP_LOGD(TAG, LOG_FMT("complete"));
     return ESP_OK;
+
+exit:
+    close(new_fd);
+    return ESP_FAIL;
 }
 
 struct httpd_ctrl_data {

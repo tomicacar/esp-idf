@@ -36,6 +36,7 @@ initializer that should be kept in sync
         .lru_purge_enable   = false,                    \
         .recv_wait_timeout  = 5,                        \
         .send_wait_timeout  = 5,                        \
+        .keep_alive_enable = true,                      \
         .global_user_ctx = NULL,                        \
         .global_user_ctx_free_fn = NULL,                \
         .global_transport_ctx = NULL,                   \
@@ -156,6 +157,10 @@ typedef struct httpd_config {
     bool        lru_purge_enable;   /*!< Purge "Least Recently Used" connection */
     uint16_t    recv_wait_timeout;  /*!< Timeout for recv function (in seconds)*/
     uint16_t    send_wait_timeout;  /*!< Timeout for send function (in seconds)*/
+    bool keep_alive_enable; /*!< Enable keep-alive timeout */
+    int keep_alive_idle;    /*!< Keep-alive idle time. Default is 5 (second) */
+    int keep_alive_interval;/*!< Keep-alive interval time. Default is 5 (second) */
+    int keep_alive_count;   /*!< Keep-alive packet retry send count. Default is 3 counts */
 
     /**
      * Global user context.
