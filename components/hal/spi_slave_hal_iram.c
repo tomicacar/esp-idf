@@ -2,23 +2,6 @@
 #include "hal/spi_ll.h"
 #include "soc/soc_caps.h"
 
-//This GDMA related part will be introduced by GDMA dedicated APIs in the future. Here we temporarily use macros.
-#if SOC_AHB_GDMA_VERSION == 1
-#include "soc/gdma_struct.h"
-#include "hal/gdma_ll.h"
-
-#define spi_dma_ll_rx_reset(dev, chan)                             gdma_ll_rx_reset_channel(&GDMA, chan)
-#define spi_dma_ll_tx_reset(dev, chan)                             gdma_ll_tx_reset_channel(&GDMA, chan);
-#define spi_dma_ll_rx_start(dev, chan, addr) do {\
-            gdma_ll_rx_set_desc_addr(&GDMA, chan, (uint32_t)addr);\
-            gdma_ll_rx_start(&GDMA, chan);\
-        } while (0)
-#define spi_dma_ll_tx_start(dev, chan, addr) do {\
-            gdma_ll_tx_set_desc_addr(&GDMA, chan, (uint32_t)addr);\
-            gdma_ll_tx_start(&GDMA, chan);\
-        } while (0)
-#endif
-
 bool spi_slave_hal_usr_is_done(spi_slave_hal_context_t* hal)
 {
     return spi_ll_usr_is_done(hal->hw);
@@ -30,52 +13,48 @@ void spi_slave_hal_user_start(const spi_slave_hal_context_t *hal)
     spi_ll_user_start(hal->hw);
 }
 
-void spi_slave_hal_prepare_data(const spi_slave_hal_context_t *hal)
+void spi_slave_hal_hw_prepare_rx(spi_dev_t *hw)
 {
-    if (hal->use_dma) {
+    spi_ll_dma_rx_fifo_reset(hw);
+    spi_ll_infifo_full_clr(hw);
+    spi_ll_dma_rx_enable(hw, 1);
+}
 
-        //Fill DMA descriptors
-        if (hal->rx_buffer) {
-            lldesc_setup_link(hal->dmadesc_rx, hal->rx_buffer, ((hal->bitlen + 7) / 8), true);
+void spi_slave_hal_hw_prepare_tx(spi_dev_t *hw)
+{
+    spi_ll_dma_tx_fifo_reset(hw);
+    spi_ll_outfifo_empty_clr(hw);
+    spi_ll_dma_tx_enable(hw, 1);
+}
 
-            //reset dma inlink, this should be reset before spi related reset
-            spi_dma_ll_rx_reset(hal->dma_in, hal->rx_dma_chan);
-            spi_ll_dma_rx_fifo_reset(hal->dma_in);
-            spi_ll_slave_reset(hal->hw);
-            spi_ll_infifo_full_clr(hal->hw);
+void spi_slave_hal_hw_reset(spi_slave_hal_context_t *hal)
+{
+    spi_ll_slave_reset(hal->hw);
+}
 
-            spi_ll_dma_rx_enable(hal->hw, 1);
-            spi_dma_ll_rx_start(hal->dma_in, hal->rx_dma_chan, &hal->dmadesc_rx[0]);
-        }
-        if (hal->tx_buffer) {
-            lldesc_setup_link(hal->dmadesc_tx, hal->tx_buffer, (hal->bitlen + 7) / 8, false);
-            //reset dma outlink, this should be reset before spi related reset
-            spi_dma_ll_tx_reset(hal->dma_out, hal->tx_dma_chan);
-            spi_ll_dma_tx_fifo_reset(hal->dma_out);
-            spi_ll_slave_reset(hal->hw);
-            spi_ll_outfifo_empty_clr(hal->hw);
+void spi_slave_hal_hw_fifo_reset(spi_slave_hal_context_t *hal, bool tx_rst, bool rx_rst)
+{
+    tx_rst ? spi_ll_cpu_tx_fifo_reset(hal->hw) : 0;
+    rx_rst ? spi_ll_cpu_rx_fifo_reset(hal->hw) : 0;
+}
 
-            spi_ll_dma_tx_enable(hal->hw, 1);
-            spi_dma_ll_tx_start(hal->dma_out, hal->tx_dma_chan, (&hal->dmadesc_tx[0]));
-        }
-    } else {
-        //No DMA. Turn off SPI and copy data to transmit buffers.
-        if (hal->tx_buffer) {
-            spi_ll_slave_reset(hal->hw);
-            spi_ll_write_buffer(hal->hw, hal->tx_buffer, hal->bitlen);
-        }
-
-        spi_ll_cpu_tx_fifo_reset(hal->hw);
+void spi_slave_hal_push_tx_buffer(spi_slave_hal_context_t *hal)
+{
+    if (hal->tx_buffer) {
+        spi_ll_write_buffer(hal->hw, hal->tx_buffer, hal->bitlen);
     }
+}
 
+void spi_slave_hal_set_trans_bitlen(spi_slave_hal_context_t *hal)
+{
     spi_ll_slave_set_rx_bitlen(hal->hw, hal->bitlen);
     spi_ll_slave_set_tx_bitlen(hal->hw, hal->bitlen);
+}
 
-#ifdef CONFIG_IDF_TARGET_ESP32
-    //SPI Slave mode on ESP32 requires MOSI/MISO enable
-    spi_ll_enable_mosi(hal->hw, (hal->rx_buffer == NULL) ? 0 : 1);
-    spi_ll_enable_miso(hal->hw, (hal->tx_buffer == NULL) ? 0 : 1);
-#endif
+void spi_slave_hal_enable_data_line(spi_slave_hal_context_t *hal)
+{
+    spi_ll_enable_mosi(hal->hw, (hal->rx_buffer != NULL));
+    spi_ll_enable_miso(hal->hw, (hal->tx_buffer != NULL));
 }
 
 void spi_slave_hal_store_result(spi_slave_hal_context_t *hal)
@@ -109,8 +88,8 @@ bool spi_slave_hal_dma_need_reset(const spi_slave_hal_context_t *hal)
         //In case CS goes high too soon, the transfer is aborted while the DMA channel still thinks it's going. This
         //leads to issues later on, so in that case we need to reset the channel. The state can be detected because
         //the DMA system doesn't give back the offending descriptor; the owner is still set to DMA.
-        for (i = 0; hal->dmadesc_rx[i].eof == 0 && hal->dmadesc_rx[i].owner == 0; i++) {}
-        if (hal->dmadesc_rx[i].owner) {
+        for (i = 0; hal->dmadesc_rx[i].dw0.suc_eof == 0 && hal->dmadesc_rx[i].dw0.owner == 0; i++) {}
+        if (hal->dmadesc_rx[i].dw0.owner) {
             ret = true;
         }
     }

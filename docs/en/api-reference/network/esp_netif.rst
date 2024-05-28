@@ -16,6 +16,9 @@ Some ESP-NETIF API functions are intended to be called by application code, for 
 
 In many cases, applications do not need to call ESP-NETIF APIs directly as they are called by the default network event handlers.
 
+
+.. _esp-netif structure:
+
 ESP-NETIF Architecture
 ----------------------
 
@@ -162,7 +165,7 @@ To be able to use the ESP-NETIF L2 TAP interface, it needs to be enabled in Kcon
 
 ``open()``
 ^^^^^^^^^^
-Once the ESP-NETIF L2 TAP is registered, it can be opened at path name “/dev/net/tap”. The same path name can be opened multiple times up to :ref:`CONFIG_ESP_NETIF_L2_TAP_MAX_FDS` and multiple file descriptors with a different configuration may access the Data Link Layer frames.
+Once the ESP-NETIF L2 TAP is registered, it can be opened at path name "/dev/net/tap". The same path name can be opened multiple times up to :ref:`CONFIG_ESP_NETIF_L2_TAP_MAX_FDS` and multiple file descriptors with a different configuration may access the Data Link Layer frames.
 
 The ESP-NETIF L2 TAP can be opened with the ``O_NONBLOCK`` file status flag to make sure the ``read()`` does not block. Note that the ``write()`` may block in the current implementation when accessing a Network interface since it is a shared resource among multiple ESP-NETIF L2 TAP file descriptors and IP stack, and there is currently no queuing mechanism deployed. The file status flag can be retrieved and modified using ``fcntl()``.
 
@@ -231,7 +234,7 @@ A raw Data Link Layer frame can be sent to Network Interface via opened and conf
     * - 6 B
       - 6 B
       - 2 B
-      - 0-1486 B 
+      - 0-1486 B
 
 In other words, there is no additional frame processing performed by the ESP-NETIF L2 TAP interface. It only checks the Ethernet type of the frame is the same as the filter configured in the file descriptor. If the Ethernet type is different, an error is returned and the frame is not sent. Note that the ``write()`` may block in the current implementation when accessing a Network interface since it is a shared resource among multiple ESP-NETIF L2 TAP file descriptors and IP stack, and there is currently no queuing mechanism deployed.
 
@@ -261,7 +264,7 @@ You can find a brief introduction to SNTP in general, its initialization code, a
 
 This section provides more details about specific use cases of the SNTP service, with statically configured servers, or use the DHCP-provided servers, or both. The workflow is usually very simple:
 
-1) Initialize and configure the service using :cpp:func:`esp_netif_sntp_init()`.
+1) Initialize and configure the service using :cpp:func:`esp_netif_sntp_init()`. This operations can only be called once (unless the SNTP service has been destroyed by :cpp:func:`esp_netif_sntp_deinit()`)
 2) Start the service via :cpp:func:`esp_netif_sntp_start()`. This step is not needed if we auto-started the service in the previous step (default). It is useful to start the service explicitly after connecting if we want to use the DHCP-obtained NTP servers. Please note, this option needs to be enabled before connecting, but the SNTP service should be started after.
 3) Wait for the system time to synchronize using :cpp:func:`esp_netif_sntp_sync_wait()` (only if needed).
 4) Stop and destroy the service using :cpp:func:`esp_netif_sntp_deinit()`.
@@ -328,7 +331,7 @@ Then we start the service normally with  :cpp:func:`esp_netif_sntp_start()`.
 ESP-NETIF Programmer's Manual
 -----------------------------
 
-Please refer to the following example to understand the initialization process of the default interface: 
+Please refer to the following example to understand the initialization process of the default interface:
 
 
 .. only:: SOC_WIFI_SUPPORTED
@@ -368,6 +371,58 @@ For more specific cases, please consult this guide: :doc:`/api-reference/network
     .. only:: CONFIG_ESP_WIFI_SOFTAP_SUPPORT
 
         * When using Wi-Fi in ``AP+STA`` mode, both these interfaces have to be created.
+
+
+IP Event: Transmit/Receive Packet
+---------------------------------
+
+This event, ``IP_EVENT_TX_RX``, is triggered for every transmitted or received IP packet. It provides information about packet transmission or reception, data length, and the ``esp_netif`` handle.
+
+Enabling the Event
+------------------
+
+**Compile Time:**
+
+The feature can be completely disabled during compilation time using the flag :ref:`CONFIG_ESP_NETIF_REPORT_DATA_TRAFFIC` in the kconfig.
+
+**Run Time:**
+
+At runtime, you can enable or disable this event using the functions :cpp:func:`esp_netif_tx_rx_event_enable()` and :cpp:func:`esp_netif_tx_rx_event_disable()`.
+
+Event Registration
+------------------
+
+To handle this event, you need to register a handler using the following syntax:
+
+.. code-block:: c
+
+    static void
+    tx_rx_event_handler(void *arg, esp_event_base_t event_base,
+                                    int32_t event_id, void *event_data)
+    {
+        ip_event_tx_rx_t *event = (ip_event_tx_rx_t *)event_data;
+
+        if (event->dir == ESP_NETIF_TX) {
+            ESP_LOGI(TAG, "Got TX event: Interface \"%s\" data len: %d", esp_netif_get_desc(event->esp_netif), event->len);
+        } else if (event->dir == ESP_NETIF_RX) {
+            ESP_LOGI(TAG, "Got RX event: Interface \"%s\" data len: %d", esp_netif_get_desc(event->esp_netif), event->len);
+        } else {
+            ESP_LOGI(TAG, "Got Unknown event: Interface \"%s\"", esp_netif_get_desc(event->esp_netif));
+        }
+    }
+
+    esp_event_handler_register(IP_EVENT, IP_EVENT_TX_RX, &tx_rx_event_handler, NULL);
+
+Here, ``tx_rx_event_handler`` is the name of the function that will handle the event.
+
+Event Data Structure
+---------------------
+
+The event data structure, :cpp:class:`ip_event_tx_rx_t`, contains the following fields:
+
+- :cpp:member:`ip_event_tx_rx_t::dir`: Indicates whether the packet was transmitted (``ESP_NETIF_TX``) or received (``ESP_NETIF_RX``).
+- :cpp:member:`ip_event_tx_rx_t::len`: Length of the data frame.
+- :cpp:member:`ip_event_tx_rx_t::esp_netif`: The network interface on which the packet was sent or received.
 
 
 API Reference

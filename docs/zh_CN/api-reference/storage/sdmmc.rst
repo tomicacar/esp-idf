@@ -6,27 +6,27 @@ SD/SDIO/MMC 驱动程序
 概述
 --------
 
-SD/SDIO/MMC 驱动是一种基于 SDMMC 和 SD SPI 主机驱动的协议级驱动程序，目前已支持 SD 存储器、SDIO 卡和 eMMC 芯片。
+SD/SDIO/MMC 驱动目前支持 SD 存储器、SDIO 卡和 eMMC 芯片。这是一个协议层驱动 (:component_file:`sdmmc/include/sdmmc_cmd.h`)，可以由以下方式实现：
 
-SDMMC 主机驱动和 SD SPI 主机驱动（:component_file:`driver/sdmmc/include/driver/sdmmc_host.h` 和 :component_file:`driver/spi/include/driver/sdspi_host.h`）为以下功能提供 API：
+.. list::
+  :SOC_SDMMC_HOST_SUPPORTED: - SDMMC 主机驱动 (:component_file:`esp_driver_sdmmc/include/driver/sdmmc_host.h`)，详情请参阅 :doc:`SDMMC Host API <../peripherals/sdmmc_host>`。
+  :SOC_GPSPI_SUPPORTED: - SDSPI 主机驱动 (:component_file:`esp_driver_sdspi/include/driver/sdspi_host.h`)，详情请参阅 :doc:`SD SPI Host API <../peripherals/sdspi_host>`。
+
+协议层与主机层
+^^^^^^^^^^^^^^
+
+本文中的 SDMMC 协议层能处理 SD 协议的具体细节，例如卡初始化流程和各种数据传输命令流程。该协议层通过 :cpp:class:`sdmmc_host_t` 结构体与主机通信。该结构体包含指向主机各种功能的指针。
+
+主机驱动通过支持以下功能来实现协议驱动：
 
 - 发送命令至从设备
 - 接收和发送数据
 - 处理总线错误
 
-初始化函数及配置函数：
-
-.. list::
-
-    :SOC_SDMMC_HOST_SUPPORTED: - 如需初始化和配置 SDMMC 主机，请参阅 :doc:`SDMMC 主机 API <../peripherals/sdmmc_host>`
-    - 如需初始化和配置 SD SPI 主机，请参阅 :doc:`SD SPI 主机 API <../peripherals/sdspi_host>`
-
-
-.. only:: SOC_SDMMC_HOST_SUPPORTED
-
-    本文档中所述的 SDMMC 协议层仅处理 SD 协议相关事项，例如卡初始化和数据传输命令。
-
-    协议层通过 :cpp:class:`sdmmc_host_t` 结构体和主机协同工作，该结构体包含指向主机各类函数的指针。
+.. blockdiag:: /../_static/diagrams/sd/sd_arch.diag
+    :scale: 100%
+    :caption: SD 主机端组件架构
+    :align: center
 
 
 应用示例
@@ -68,7 +68,7 @@ ESP-IDF :example:`storage/sd_card` 目录下提供了 SDMMC 驱动与 FatFs 库�
 
     1. I/O 中止 (0x06) 寄存器：在该寄存器中设置 RES 位可重置卡的 IO 部分；
     2. 总线接口控制 (0x07) 寄存器：如果主机和插槽配置中启用 4 线模式，则驱动程序会尝试在该寄存器中设置总线宽度字段。如果字段设置成功，则从机支持 4 线模式，主机也切换至 4 线模式；
-    3. 高速（0x13）寄存器：如果主机配置中启用高速模式，则该寄存器的 SHS 位会被设置。
+    3. 高速 (0x13) 寄存器：如果主机配置中启用高速模式，则该寄存器的 SHS 位会被设置。
 
     注意，驱动程序不会在 (1) I/O 使能寄存器和 Int 使能寄存器，及 (2) I/O 块大小中，设置任何位。应用程序可通过调用 :cpp:func:`sdmmc_io_write_byte` 来设置相关位。
 

@@ -83,6 +83,15 @@ The SPI-Ethernet Module initialization is now simplified. Previously, you had to
 
 Now, you no longer need to call :cpp:func:`spi_bus_add_device` as SPI devices are allocated internally. As a result, the :cpp:class:`eth_dm9051_config_t`, :cpp:class:`eth_w5500_config_t`, and :cpp:class:`eth_ksz8851snl_config_t` configuration structures are updated to include members for SPI device configuration (e.g., to allow fine tuning of SPI timing which may be dependent on PCB design). Likewise, the ``ETH_DM9051_DEFAULT_CONFIG``, ``ETH_W5500_DEFAULT_CONFIG``, and ``ETH_KSZ8851SNL_DEFAULT_CONFIG`` configuration initialization macros are updated to accept new input parameters. Refer to :doc:`Ethernet API Reference Guide <../../../api-reference/network/esp_eth>` for an example of SPI-Ethernet Module initialization.
 
+Ethernet Driver
+---------------
+
+APIs for creating MAC instances (`esp_eth_mac_new_*()`) have been reworked to accept two parameters, instead of one common configuration. Now, the configuration includes
+
+* Vendor specific MAC configuration
+* Ethernet driver MAC configuration
+
+This is applicable to internal Ethernet MAC :cpp:func:`esp_eth_mac_new_esp32()` as well as to external MAC devices, such as :cpp:func:`esp_eth_mac_new_ksz8851snl()`, :cpp:func:`esp_eth_mac_new_dm9051()`, and :cpp:func:`esp_eth_mac_new_w5500()`
 
 .. _tcpip-adapter:
 
@@ -130,6 +139,8 @@ All the ``tcpip_adapter`` functions have their ``esp-netif`` counter-part. Pleas
 *  :component_file:`DHCP <esp_netif/include/esp_netif.h#L387>`
 *  :component_file:`DNS <esp_netif/include/esp_netif.h#L516>`
 *  :component_file:`IP address <esp_netif/include/esp_netif.h#L568>`
+
+The TCP/IP Adapter API ``tcpip_adapter_get_sta_list()`` that was used to acquire a list of associated Wi-Fi stations to the Software Access Point (softAP) has been moved to the Wi-Fi component and renamed to :cpp:func:`esp_wifi_ap_get_sta_list_with_ip()`, which is a special case of the ESP-NETIF API :cpp:func:`esp_netif_dhcps_get_clients_by_mac()` that could be used more generally to provide a list of clients connected to a DHCP server no matter which network interface the server is running on.
 
 Default Event Handlers
 ^^^^^^^^^^^^^^^^^^^^^^

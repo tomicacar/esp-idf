@@ -338,8 +338,8 @@ Generally, a Provisioner is used to provision unprovisioned devices and form a m
 
     - Provisioner bind AppKey to its own client model by calling the API :cpp:func:`esp_ble_mesh_provisioner_bind_app_key_to_local_model`.
 
-1.24 How Does Provisoner Control the Server Model of Nodes?
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1.24 How Does Provisioner Control the Server Model of Nodes?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     ESP-BLE-MESH supports all SIG-defined client models. Provisioner can use these client models to control the server models of nodes. And the client models are divided into 6 categories with each category has the corresponding functions.
 
@@ -406,7 +406,7 @@ Generally, a Provisioner is used to provision unprovisioned devices and form a m
 2.4 How to Achieve the Transmission of Messages Without Packet Loss?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    Acknowledegd message is needed if users want to transmit messages without packet loss. The default time to wait for corresponding response is set in :ref:`CONFIG_BLE_MESH_CLIENT_MSG_TIMEOUT`. If the sender waits for the response until the timer expires, the corresponding timeout event would be triggered.
+    Acknowledged message is needed if users want to transmit messages without packet loss. The default time to wait for corresponding response is set in :ref:`CONFIG_BLE_MESH_CLIENT_MSG_TIMEOUT`. If the sender waits for the response until the timer expires, the corresponding timeout event would be triggered.
 
 .. note::
 
@@ -568,7 +568,7 @@ Generally, a Provisioner is used to provision unprovisioned devices and form a m
 
     The **count** value is provided to the Proxy node which is provisioned by the App so as to determine when to start Proxy advertising in advance.
 
-4.5 When Will Configuration Client Model of the Node Running :Example:`fast_prov_server <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_server>` Example Start to Work?
+4.5 When will Configuration Client Model of the node running :example:`fast_prov_server <bluetooth/esp_ble_mesh/fast_provisioning/fast_prov_server>` example start to work?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     Configuration Client Model will start to work after the Temporary Provisioner functionality is enabled.
@@ -606,7 +606,7 @@ You can find meaning of errors or warnings when they appear at the bottom of ESP
 
     When the node receives a segment ack and it does not find any self-send segmented message related with this ack, then this warning will appear.
 
-5.5 What Is the Meaning of Warning  ``No free dlots for new incoming segmented messages``?
+5.5 What Is the Meaning of Warning  ``No free slots for new incoming segmented messages``?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     When the node has no space for receiving new segmented message, this warning will appear. Users can make the space larger through the configuration :ref:`CONFIG_BLE_MESH_RX_SEG_MSG_COUNT`.

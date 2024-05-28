@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -15,10 +15,11 @@
 #include <dirent.h>
 #include "esp_console.h"
 #include "esp_check.h"
+#include "esp_partition.h"
 #include "driver/gpio.h"
 #include "tinyusb.h"
 #include "tusb_msc_storage.h"
-#ifdef CONFIG_EXAMPLE_STORAGE_MEDIA_SDMMCCARD
+#ifdef CONFIG_EXAMPLE_STORAGE_MEDIA_SDMMC
 #include "diskio_impl.h"
 #include "diskio_sdmmc.h"
 #endif
@@ -43,14 +44,6 @@ enum {
     EDPT_MSC_IN   = 0x81,
 };
 
-static uint8_t const desc_configuration[] = {
-    // Config number, interface count, string index, total length, attribute, power in mA
-    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, TUSB_DESC_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
-
-    // Interface number, string index, EP Out & EP In address, EP size
-    TUD_MSC_DESCRIPTOR(ITF_NUM_MSC, 0, EDPT_MSC_OUT, EDPT_MSC_IN, TUD_OPT_HIGH_SPEED ? 512 : 64),
-};
-
 static tusb_desc_device_t descriptor_config = {
     .bLength = sizeof(descriptor_config),
     .bDescriptorType = TUSB_DESC_DEVICE,
@@ -67,6 +60,36 @@ static tusb_desc_device_t descriptor_config = {
     .iSerialNumber = 0x03,
     .bNumConfigurations = 0x01
 };
+
+static uint8_t const msc_fs_configuration_desc[] = {
+    // Config number, interface count, string index, total length, attribute, power in mA
+    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, TUSB_DESC_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
+
+    // Interface number, string index, EP Out & EP In address, EP size
+    TUD_MSC_DESCRIPTOR(ITF_NUM_MSC, 0, EDPT_MSC_OUT, EDPT_MSC_IN, 64),
+};
+
+#if (TUD_OPT_HIGH_SPEED)
+static const tusb_desc_device_qualifier_t device_qualifier = {
+    .bLength = sizeof(tusb_desc_device_qualifier_t),
+    .bDescriptorType = TUSB_DESC_DEVICE_QUALIFIER,
+    .bcdUSB = 0x0200,
+    .bDeviceClass = TUSB_CLASS_MISC,
+    .bDeviceSubClass = MISC_SUBCLASS_COMMON,
+    .bDeviceProtocol = MISC_PROTOCOL_IAD,
+    .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
+    .bNumConfigurations = 0x01,
+    .bReserved = 0
+};
+
+static uint8_t const msc_hs_configuration_desc[] = {
+    // Config number, interface count, string index, total length, attribute, power in mA
+    TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, TUSB_DESC_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
+
+    // Interface number, string index, EP Out & EP In address, EP size
+    TUD_MSC_DESCRIPTOR(ITF_NUM_MSC, 0, EDPT_MSC_OUT, EDPT_MSC_IN, 512),
+};
+#endif // TUD_OPT_HIGH_SPEED
 
 static char const *string_desc_arr[] = {
     (const char[]) { 0x09, 0x04 },  // 0: is supported language is English (0x0409)
@@ -130,7 +153,6 @@ static void _mount(void)
 {
     ESP_LOGI(TAG, "Mount storage...");
     ESP_ERROR_CHECK(tinyusb_msc_storage_mount(BASE_PATH));
-
 
     // List all the files in this directory
     ESP_LOGI(TAG, "\nls command output:");
@@ -347,7 +369,8 @@ void app_main(void)
 
     const tinyusb_msc_spiflash_config_t config_spi = {
         .wl_handle = wl_handle,
-        .callback_mount_changed = storage_mount_changed_cb  /* First way to register the callback. This is while initializing the storage. */
+        .callback_mount_changed = storage_mount_changed_cb,  /* First way to register the callback. This is while initializing the storage. */
+        .mount_config.max_files = 5,
     };
     ESP_ERROR_CHECK(tinyusb_msc_storage_init_spiflash(&config_spi));
     ESP_ERROR_CHECK(tinyusb_msc_register_callback(TINYUSB_MSC_EVENT_MOUNT_CHANGED, storage_mount_changed_cb)); /* Other way to register the callback i.e. registering using separate API. If the callback had been already registered, it will be overwritten. */
@@ -357,7 +380,8 @@ void app_main(void)
 
     const tinyusb_msc_sdmmc_config_t config_sdmmc = {
         .card = card,
-        .callback_mount_changed = storage_mount_changed_cb  /* First way to register the callback. This is while initializing the storage. */
+        .callback_mount_changed = storage_mount_changed_cb,  /* First way to register the callback. This is while initializing the storage. */
+        .mount_config.max_files = 5,
     };
     ESP_ERROR_CHECK(tinyusb_msc_storage_init_sdmmc(&config_sdmmc));
     ESP_ERROR_CHECK(tinyusb_msc_register_callback(TINYUSB_MSC_EVENT_MOUNT_CHANGED, storage_mount_changed_cb)); /* Other way to register the callback i.e. registering using separate API. If the callback had been already registered, it will be overwritten. */
@@ -372,7 +396,13 @@ void app_main(void)
         .string_descriptor = string_desc_arr,
         .string_descriptor_count = sizeof(string_desc_arr) / sizeof(string_desc_arr[0]),
         .external_phy = false,
-        .configuration_descriptor = desc_configuration,
+#if (TUD_OPT_HIGH_SPEED)
+        .fs_configuration_descriptor = msc_fs_configuration_desc,
+        .hs_configuration_descriptor = msc_hs_configuration_desc,
+        .qualifier_descriptor = &device_qualifier,
+#else
+        .configuration_descriptor = msc_fs_configuration_desc,
+#endif // TUD_OPT_HIGH_SPEED
     };
     ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
     ESP_LOGI(TAG, "USB MSC initialization DONE");
@@ -388,7 +418,7 @@ void app_main(void)
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_config, &repl_config, &repl));
     for (int count = 0; count < sizeof(cmds) / sizeof(esp_console_cmd_t); count++) {
-        ESP_ERROR_CHECK( esp_console_cmd_register(&cmds[count]) );
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[count]));
     }
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
 }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -17,6 +17,7 @@
 #include "esp_gatts_api.h"
 #include "esp_bt_defs.h"
 #include "esp_bt_main.h"
+#include "esp_bt_device.h"
 #include "example_ble_sec_gatts_demo.h"
 
 #define GATTS_TABLE_TAG "SEC_GATTS_DEMO"
@@ -256,6 +257,10 @@ static char *esp_auth_req_to_str(esp_ble_auth_req_t auth_req)
 static void show_bonded_devices(void)
 {
     int dev_num = esp_ble_get_bond_device_num();
+    if (dev_num == 0) {
+        ESP_LOGI(GATTS_TABLE_TAG, "Bonded devices number zero\n");
+        return;
+    }
 
     esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
     if (!dev_list) {
@@ -267,7 +272,7 @@ static void show_bonded_devices(void)
 
     ESP_LOGI(GATTS_TABLE_TAG, "Bonded devices list : %d", dev_num);
     for (int i = 0; i < dev_num; i++) {
-        esp_log_buffer_hex(GATTS_TABLE_TAG, (void *)dev_list[i].bd_addr, sizeof(esp_bd_addr_t));
+        ESP_LOG_BUFFER_HEX(GATTS_TABLE_TAG, (void *)dev_list[i].bd_addr, sizeof(esp_bd_addr_t));
     }
 
     free(dev_list);
@@ -276,6 +281,10 @@ static void show_bonded_devices(void)
 static void __attribute__((unused)) remove_all_bonded_devices(void)
 {
     int dev_num = esp_ble_get_bond_device_num();
+    if (dev_num == 0) {
+        ESP_LOGI(GATTS_TABLE_TAG, "Bonded devices number zero\n");
+        return;
+    }
 
     esp_ble_bond_dev_t *dev_list = (esp_ble_bond_dev_t *)malloc(sizeof(esp_ble_bond_dev_t) * dev_num);
     if (!dev_list) {
@@ -371,7 +380,7 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
         ESP_LOGD(GATTS_TABLE_TAG, "ESP_GAP_BLE_REMOVE_BOND_DEV_COMPLETE_EVT status = %d", param->remove_bond_dev_cmpl.status);
         ESP_LOGI(GATTS_TABLE_TAG, "ESP_GAP_BLE_REMOVE_BOND_DEV");
         ESP_LOGI(GATTS_TABLE_TAG, "-----ESP_GAP_BLE_REMOVE_BOND_DEV----");
-        esp_log_buffer_hex(GATTS_TABLE_TAG, (void *)param->remove_bond_dev_cmpl.bd_addr, sizeof(esp_bd_addr_t));
+        ESP_LOG_BUFFER_HEX(GATTS_TABLE_TAG, (void *)param->remove_bond_dev_cmpl.bd_addr, sizeof(esp_bd_addr_t));
         ESP_LOGI(GATTS_TABLE_TAG, "------------------------------------");
         break;
     }
@@ -417,7 +426,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event,
             break;
         case ESP_GATTS_WRITE_EVT:
             ESP_LOGI(GATTS_TABLE_TAG, "ESP_GATTS_WRITE_EVT, write value:");
-            esp_log_buffer_hex(GATTS_TABLE_TAG, param->write.value, param->write.len);
+            ESP_LOG_BUFFER_HEX(GATTS_TABLE_TAG, param->write.value, param->write.len);
             break;
         case ESP_GATTS_EXEC_WRITE_EVT:
             break;
@@ -531,8 +540,8 @@ void app_main(void)
     }
 
     ESP_LOGI(GATTS_TABLE_TAG, "%s init bluetooth", __func__);
-    esp_bluedroid_config_t bluedroid_cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
-    ret = esp_bluedroid_init_with_cfg(&bluedroid_cfg);
+
+    ret = esp_bluedroid_init();
     if (ret) {
         ESP_LOGE(GATTS_TABLE_TAG, "%s init bluetooth failed: %s", __func__, esp_err_to_name(ret));
         return;

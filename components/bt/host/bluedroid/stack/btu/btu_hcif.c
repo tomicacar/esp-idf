@@ -90,7 +90,7 @@ static void btu_hcif_loopback_command_evt (void);
 static void btu_hcif_data_buf_overflow_evt (void);
 static void btu_hcif_max_slots_changed_evt (void);
 static void btu_hcif_read_clock_off_comp_evt (UINT8 *p);
-static void btu_hcif_conn_pkt_type_change_evt (void);
+static void btu_hcif_conn_pkt_type_change_evt (UINT8 *p);
 static void btu_hcif_qos_violation_evt (UINT8 *p);
 static void btu_hcif_page_scan_mode_change_evt (void);
 static void btu_hcif_page_scan_rep_mode_chng_evt (void);
@@ -282,7 +282,7 @@ void btu_hcif_process_event (UNUSED_ATTR UINT8 controller_id, BT_HDR *p_msg)
         btu_hcif_read_clock_off_comp_evt (p);
         break;
     case HCI_CONN_PKT_TYPE_CHANGE_EVT:
-        btu_hcif_conn_pkt_type_change_evt ();
+        btu_hcif_conn_pkt_type_change_evt (p);
         break;
     case HCI_QOS_VIOLATION_EVT:
         btu_hcif_qos_violation_evt (p);
@@ -947,6 +947,7 @@ static void btu_hcif_esco_connection_chg_evt (UINT8 *p)
 static void btu_hcif_hdl_command_complete (UINT16 opcode, UINT8 *p, UINT16 evt_len,
         void *p_cplt_cback)
 {
+    uint8_t status;
     switch (opcode) {
     case HCI_INQUIRY_CANCEL:
         /* Tell inquiry processing that we are done */
@@ -997,6 +998,16 @@ static void btu_hcif_hdl_command_complete (UINT16 opcode, UINT8 *p, UINT16 evt_l
     case HCI_WRITE_PAGE_TOUT:
         btm_set_page_timeout_complete(p);
         break;
+#if (ENC_KEY_SIZE_CTRL_MODE == ENC_KEY_SIZE_CTRL_MODE_STD)
+    case HCI_SET_MIN_ENC_KEY_SIZE:
+        btm_set_min_enc_key_size_complete(p);
+        break;
+#endif
+#if (ENC_KEY_SIZE_CTRL_MODE == ENC_KEY_SIZE_CTRL_MODE_VSC)
+    case HCI_VENDOR_BT_SET_MIN_ENC_KEY_SIZE:
+        btm_set_min_enc_key_size_complete(p);
+        break;
+#endif
 #endif
 
 #if (BLE_INCLUDED == TRUE)
@@ -1012,7 +1023,6 @@ static void btu_hcif_hdl_command_complete (UINT16 opcode, UINT8 *p, UINT16 evt_l
         btm_ble_clear_white_list_complete(p, evt_len);
         break;
     case HCI_BLE_WRITE_ADV_PARAMS: {
-        uint8_t status;
         STREAM_TO_UINT8  (status, p);
         if(status != HCI_SUCCESS) {
             HCI_TRACE_ERROR("hci write adv params error 0x%x", status);
@@ -1020,7 +1030,6 @@ static void btu_hcif_hdl_command_complete (UINT16 opcode, UINT8 *p, UINT16 evt_l
         break;
     }
     case HCI_BLE_RC_PARAM_REQ_REPLY: {
-        uint8_t status;
         STREAM_TO_UINT8  (status, p);
         if(status != HCI_SUCCESS) {
             HCI_TRACE_ERROR("hci connection params reply command error 0x%x", status);
@@ -1028,7 +1037,6 @@ static void btu_hcif_hdl_command_complete (UINT16 opcode, UINT8 *p, UINT16 evt_l
         break;
     }
     case HCI_BLE_RC_PARAM_REQ_NEG_REPLY: {
-        uint8_t status;
         STREAM_TO_UINT8  (status, p);
         if(status != HCI_SUCCESS) {
             HCI_TRACE_ERROR("hci connection params neg reply command error %x", status);
@@ -1090,19 +1098,22 @@ static void btu_hcif_hdl_command_complete (UINT16 opcode, UINT8 *p, UINT16 evt_l
         btm_ble_set_addr_resolution_enable_complete(p, evt_len);
         break;
     case HCI_BLE_SET_RAND_PRIV_ADDR_TIMOUT:
+        btm_ble_set_rpa_timeout_complete(p, evt_len);
         break;
+    case HCI_BLE_SET_PRIVACY_MODE:
+        btm_ble_set_privacy_mode_complete(p, evt_len);
+        break;
+#endif // #if (defined BLE_PRIVACY_SPT && BLE_PRIVACY_SPT == TRUE)
 #if (BLE_50_FEATURE_SUPPORT == TRUE)
     case HCI_BLE_SET_EXT_ADV_PARAM:
     case HCI_BLE_SET_EXT_ADV_DATA:
     case HCI_BLE_SET_EXT_SCAN_RSP_DATA:
     case HCI_BLE_SET_EXT_ADV_ENABLE: {
-        uint8_t status;
         STREAM_TO_UINT8  (status, p);
         HCI_TRACE_EVENT("%s opcode 0x%x status 0x%x", __func__, opcode, status);
 	    break;
     }
     case HCI_BLE_READ_PHY: {
-        uint8_t status;
         uint16_t conn_handle;
         uint8_t tx_phy;
         uint8_t rx_phy;
@@ -1125,7 +1136,6 @@ static void btu_hcif_hdl_command_complete (UINT16 opcode, UINT8 *p, UINT16 evt_l
     case HCI_BLE_PERIOD_ADV_SYNC_TRANS:
     case HCI_BLE_PERIOD_ADV_SET_INFO_TRANS:
     case HCI_BLE_SET_PAST_PARAMS: {
-        UINT8 status;
         UINT16 conn_handle;
         STREAM_TO_UINT8(status, p);
         STREAM_TO_UINT16(conn_handle, p);
@@ -1133,14 +1143,12 @@ static void btu_hcif_hdl_command_complete (UINT16 opcode, UINT8 *p, UINT16 evt_l
         break;
     }
 #endif // #if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
-#endif
 #endif /* (BLE_INCLUDED == TRUE) */
 
     default: {
         if ((opcode & HCI_GRP_VENDOR_SPECIFIC) == HCI_GRP_VENDOR_SPECIFIC) {
             btm_vsc_complete (p, opcode, evt_len, (tBTM_CMPL_CB *)p_cplt_cback);
         }
-        uint8_t status;
         STREAM_TO_UINT8  (status, p);
         if(status != HCI_SUCCESS) {
             HCI_TRACE_ERROR("CC evt: op=0x%x, status=0x%x", opcode, status);
@@ -1247,6 +1255,9 @@ static void btu_hcif_command_complete_evt(BT_HDR *response, void *context)
 static void btu_hcif_hdl_command_status (UINT16 opcode, UINT8 status, UINT8 *p_cmd,
         void *p_vsc_status_cback)
 {
+    if (status != HCI_SUCCESS){
+        HCI_TRACE_WARNING("%s,opcode:0x%04x,status:0x%02x", __func__, opcode,status);
+    }
     BD_ADDR         bd_addr;
     UINT16          handle;
 #if BTM_SCO_INCLUDED == TRUE
@@ -1368,6 +1379,9 @@ static void btu_hcif_hdl_command_status (UINT16 opcode, UINT8 status, UINT8 *p_c
                 break;
 
 #if BLE_INCLUDED == TRUE
+#if (BLE_50_FEATURE_SUPPORT == TRUE)
+            case HCI_BLE_EXT_CREATE_CONN:
+#endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
             case HCI_BLE_CREATE_LL_CONN:
                 btm_ble_create_ll_conn_complete(status);
                 break;
@@ -1460,7 +1474,6 @@ static void btu_hcif_command_status_evt(uint8_t status, BT_HDR *command, void *c
     hack->context = context;
 
     event->event = BTU_POST_TO_TASK_NO_GOOD_HORRIBLE_HACK;
-
     if (btu_task_post(SIG_BTU_HCI_MSG, event, OSI_THREAD_MAX_TIMEOUT) == false) {
         osi_free(event);
     }
@@ -1765,8 +1778,19 @@ static void btu_hcif_read_clock_off_comp_evt (UINT8 *p)
 ** Returns          void
 **
 *******************************************************************************/
-static void btu_hcif_conn_pkt_type_change_evt (void)
+static void btu_hcif_conn_pkt_type_change_evt (UINT8 *p)
 {
+    UINT8       status;
+    UINT16      handle;
+    UINT16      pkt_types;
+
+    STREAM_TO_UINT8  (status, p);
+    STREAM_TO_UINT16 (handle, p);
+    STREAM_TO_UINT16 (pkt_types, p);
+
+    handle = HCID_GET_HANDLE (handle);
+
+    btm_acl_pkt_types_changed(status, handle, pkt_types);
 }
 
 

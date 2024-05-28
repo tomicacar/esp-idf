@@ -31,6 +31,12 @@
 #define PCNT_ENTER_CRITICAL(mux)    portENTER_CRITICAL(mux)
 #define PCNT_EXIT_CRITICAL(mux)     portEXIT_CRITICAL(mux)
 
+#if !SOC_RCC_IS_INDEPENDENT
+#define PCNT_RCC_ATOMIC() PERIPH_RCC_ATOMIC()
+#else
+#define PCNT_RCC_ATOMIC()
+#endif
+
 static const char *TAG = "pcnt(legacy)";
 
 #define PCNT_CHECK(a, str, ret_val) ESP_RETURN_ON_FALSE(a, ret_val, TAG, "%s", str)
@@ -362,13 +368,15 @@ static inline esp_err_t _pcnt_unit_config(pcnt_port_t pcnt_port, const pcnt_conf
     PCNT_CHECK(ctrl_io < 0 || GPIO_IS_VALID_GPIO(ctrl_io), "PCNT ctrl io error", ESP_ERR_INVALID_ARG);
     PCNT_CHECK((pcnt_config->pos_mode < PCNT_COUNT_MAX) && (pcnt_config->neg_mode < PCNT_COUNT_MAX), PCNT_COUNT_MODE_ERR_STR, ESP_ERR_INVALID_ARG);
     PCNT_CHECK((pcnt_config->hctrl_mode < PCNT_MODE_MAX) && (pcnt_config->lctrl_mode < PCNT_MODE_MAX), PCNT_CTRL_MODE_ERR_STR, ESP_ERR_INVALID_ARG);
-    /*Enalbe hardware module*/
+    /*Enable hardware module*/
     static bool pcnt_enable = false;
     if (pcnt_enable == false) {
-        periph_module_reset(pcnt_periph_signals.groups[pcnt_port].module);
+        PCNT_RCC_ATOMIC() {
+            pcnt_ll_reset_register(pcnt_port);
+            pcnt_ll_enable_bus_clock(pcnt_port, true);
+        }
         pcnt_enable = true;
     }
-    periph_module_enable(pcnt_periph_signals.groups[pcnt_port].module);
     /*Set counter range*/
     _pcnt_set_event_value(pcnt_port, unit, PCNT_EVT_H_LIM, pcnt_config->counter_h_lim);
     _pcnt_set_event_value(pcnt_port, unit, PCNT_EVT_L_LIM, pcnt_config->counter_l_lim);

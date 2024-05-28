@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -218,3 +218,27 @@
 #define OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE 1
 #endif
 #endif //CONFIG_OPENTHREAD_LINK_METRICS
+
+#if CONFIG_OPENTHREAD_NCP_VENDOR_HOOK
+/**
+ * @def OPENTHREAD_ENABLE_NCP_VENDOR_HOOK
+ *
+ * Define as 1 to support ESP OpenThread NCP vendor commands
+ *
+ */
+#ifndef OPENTHREAD_ENABLE_NCP_VENDOR_HOOK
+#define OPENTHREAD_ENABLE_NCP_VENDOR_HOOK 1
+#endif
+#endif //CONFIG_OPENTHREAD_NCP_VENDOR_HOOK
+
+/**
+ * @def OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_DIRECT
+ *
+ * The maximum number of backoffs the CSMA-CA algorithm will attempt before declaring a channel access failure.
+ *
+ * Equivalent to macMaxCSMABackoffs in IEEE 802.15.4-2006, default value is 4.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_DIRECT
+#define OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_DIRECT CONFIG_OPENTHREAD_MAC_MAX_CSMA_BACKOFFS_DIRECT
+#endif

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -24,6 +24,7 @@
 #include "bootloader_sha.h"
 #include "sys/param.h"
 #include "bootloader_flash_priv.h"
+#include "esp_rom_caps.h"
 
 #define ESP_PARTITION_HASH_LEN 32 /* SHA-256 digest length */
 #define IS_MAX_REV_SET(max_chip_rev_full) (((max_chip_rev_full) != 65535) && ((max_chip_rev_full) != 0))
@@ -121,7 +122,7 @@ int bootloader_common_select_otadata(const esp_ota_select_entry_t *two_otadata, 
 #if CONFIG_BOOTLOADER_RESERVE_RTC_MEM
 
 static uint32_t rtc_retain_mem_size(void) {
-#ifdef CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC
+#if CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC && !CONFIG_BOOTLOADER_CUSTOM_RESERVE_RTC_IN_CRC
     /* A custom memory has been reserved by the user, do not consider this memory into CRC calculation as it may change without
      * the have the user updating the CRC. Return the offset of the custom field, which is equivalent to size of the structure
      * minus the size of everything after (including) `custom` */
@@ -212,7 +213,12 @@ void bootloader_common_update_rtc_retain_mem(esp_partition_pos_t* partition, boo
 rtc_retain_mem_t* bootloader_common_get_rtc_retain_mem(void)
 {
 #ifdef BOOTLOADER_BUILD
+
+#if ESP_ROM_HAS_LP_ROM
+    #define RTC_RETAIN_MEM_ADDR (SOC_RTC_DRAM_LOW)
+#else
     #define RTC_RETAIN_MEM_ADDR (SOC_RTC_DRAM_HIGH - sizeof(rtc_retain_mem_t))
+#endif //ESP_ROM_HAS_LP_ROM
     static rtc_retain_mem_t *const s_bootloader_retain_mem = (rtc_retain_mem_t *)RTC_RETAIN_MEM_ADDR;
     return s_bootloader_retain_mem;
 #else
@@ -220,5 +226,6 @@ rtc_retain_mem_t* bootloader_common_get_rtc_retain_mem(void)
     return &s_bootloader_retain_mem;
 #endif // !BOOTLOADER_BUILD
 }
+
 
 #endif // CONFIG_BOOTLOADER_RESERVE_RTC_MEM

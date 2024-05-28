@@ -24,14 +24,7 @@ components/esp_rom/include/esp32s2/rom/rsa_pss.h
 components/lwip/lwip/src/include/lwip/priv/memp_std.h
 components/lwip/include/lwip/sockets.h
 components/lwip/lwip/src/include/lwip/prot/nd6.h
-
-## Header produced non-zero object:
-components/esp_phy/esp32/include/phy_init_data.h
-components/esp_phy/esp32s2/include/phy_init_data.h
-components/esp_phy/esp32s3/include/phy_init_data.h
-components/esp_phy/esp32c3/include/phy_init_data.h
-components/esp_phy/esp32c2/include/phy_init_data.h
-components/esp_phy/esp32c6/include/phy_init_data.h
+components/lwip/lwip/src/include/netif/ppp/
 
 components/spi_flash/include/spi_flash_chip_issi.h
 components/spi_flash/include/spi_flash_chip_mxic.h
@@ -56,7 +49,7 @@ components/mbedtls/port/dynamic/esp_mbedtls_dynamic_impl.h
 components/esp-tls/private_include/
 
 components/protobuf-c/
-
+components/protocomm/proto-c/
 
 components/fatfs/vfs/vfs_fat_internal.h
 components/fatfs/src/ffconf.h
@@ -85,11 +78,11 @@ components/esp_gdbstub/include/esp_gdbstub.h
 
 components/esp_hw_support/include/esp_memprot.h
 components/esp_hw_support/include/esp_private/esp_memprot_internal.h
+components/esp_hw_support/include/esp_private/esp_riscv_intr.h
 
 ### Here are the files that use CONFIG_XXX values but don't include sdkconfig.h
 #
-components/esp_wifi/include/esp_private/wifi_os_adapter.h
-components/esp_coex/include/esp_coexist_adapter.h
+components/esp_coex/include/private/esp_coexist_adapter.h
 components/esp_coex/include/esp_coex_i154.h
 ### To be fixed: headers that rely on implicit inclusion
 #
@@ -98,9 +91,13 @@ components/esp_rom/include/esp32c3/rom/rtc.h
 components/esp_rom/include/esp32s2/rom/rtc.h
 components/esp_rom/include/esp32s3/rom/rtc.h
 components/esp_rom/include/esp32c2/rom/rtc.h
+# TODO: IDF-9197
+components/esp_rom/include/esp32c5/beta3/esp32c5/rom/rtc.h
+components/esp_rom/include/esp32c5/mp/esp32c5/rom/rtc.h
 components/esp_rom/include/esp32c6/rom/rtc.h
 components/esp_rom/include/esp32h2/rom/rtc.h
 components/esp_rom/include/esp32p4/rom/rtc.h
+components/esp_rom/include/esp32c61/rom/rtc.h
 components/esp_rom/include/esp32/rom/sha.h
 components/esp_rom/include/esp32/rom/secure_boot.h
 components/esp_rom/include/esp32c3/rom/spi_flash.h
@@ -108,12 +105,7 @@ components/esp_rom/include/esp32s2/rom/spi_flash.h
 components/esp_rom/include/esp32s2/rom/cache.h
 components/esp_rom/include/esp32s2/rom/secure_boot.h
 components/esp_rom/include/esp32s2/rom/opi_flash.h
-components/esp_rom/include/esp32s2/rom/efuse.h
 components/esp_ringbuf/include/freertos/ringbuf.h
-components/esp_wifi/include/esp_wifi_crypto_types.h
-components/esp_wifi/include/esp_wifi_netif.h
-components/esp_wifi/include/smartconfig_ack.h
-components/esp_wifi/include/esp_wifi_default.h
 components/esp_netif/include/esp_netif_defaults.h
 components/esp_netif/include/esp_netif_net_stack.h
 components/esp_netif/include/esp_netif_ppp.h
@@ -121,7 +113,6 @@ components/protocomm/include/transports/protocomm_httpd.h
 components/fatfs/src/diskio.h
 components/fatfs/diskio/diskio_sdmmc.h
 components/mbedtls/esp_crt_bundle/include/esp_crt_bundle.h
-components/wifi_provisioning/include/wifi_provisioning/scheme_softap.h
 components/usb/include/esp_private/usb_phy.h
 components/usb/include/usb/usb_types_stack.h
 
@@ -130,132 +121,7 @@ components/usb/include/usb/usb_types_stack.h
 components/bootloader_support/bootloader_flash/include/bootloader_flash.h
 components/bootloader_support/bootloader_flash/include/bootloader_flash_priv.h
 components/esp_hw_support/include/esp_private/regdma_link.h
-components/hal/esp32/include/hal/aes_ll.h
-components/hal/esp32/include/hal/cache_ll.h
-components/hal/esp32/include/hal/i2c_ll.h
-components/hal/esp32/include/hal/ledc_ll.h
-components/hal/esp32/include/hal/mcpwm_ll.h
-components/hal/esp32/include/hal/mpi_ll.h
-components/hal/esp32/include/hal/pcnt_ll.h
-components/hal/esp32/include/hal/sdio_slave_ll.h
-components/hal/esp32/include/hal/spi_flash_ll.h
-components/hal/esp32c2/include/hal/adc_ll.h
-components/hal/esp32c2/include/hal/cache_ll.h
-components/hal/esp32c2/include/hal/ecc_ll.h
-components/hal/esp32c2/include/hal/gpspi_flash_ll.h
-components/hal/esp32c2/include/hal/i2c_ll.h
-components/hal/esp32c2/include/hal/ledc_ll.h
-components/hal/esp32c2/include/hal/mpu_ll.h
-components/hal/esp32c2/include/hal/spi_flash_ll.h
-components/hal/esp32c2/include/hal/spi_ll.h
-components/hal/esp32c2/include/hal/spimem_flash_ll.h
-components/hal/esp32c3/include/hal/adc_ll.h
-components/hal/esp32c3/include/hal/aes_ll.h
-components/hal/esp32c3/include/hal/cache_ll.h
-components/hal/esp32c3/include/hal/gpspi_flash_ll.h
-components/hal/esp32c3/include/hal/i2c_ll.h
-components/hal/esp32c3/include/hal/ledc_ll.h
-components/hal/esp32c3/include/hal/memprot_ll.h
-components/hal/esp32c3/include/hal/mpi_ll.h
-components/hal/esp32c3/include/hal/mpu_ll.h
-components/hal/esp32c3/include/hal/spi_flash_ll.h
-components/hal/esp32c3/include/hal/spi_ll.h
-components/hal/esp32c3/include/hal/spimem_flash_ll.h
-components/hal/esp32c3/include/hal/uhci_ll.h
-components/hal/esp32c6/include/hal/aes_ll.h
-components/hal/esp32c6/include/hal/cache_ll.h
-components/hal/esp32c6/include/hal/ecc_ll.h
-components/hal/esp32c6/include/hal/gpspi_flash_ll.h
-components/hal/esp32c6/include/hal/i2c_ll.h
-components/hal/esp32c6/include/hal/ieee802154_ll.h
-components/hal/esp32c6/include/hal/mcpwm_ll.h
-components/hal/esp32c6/include/hal/mpi_ll.h
-components/hal/esp32c6/include/hal/mpu_ll.h
-components/hal/esp32c6/include/hal/pcnt_ll.h
-components/hal/esp32c6/include/hal/sdio_slave_ll.h
-components/hal/esp32c6/include/hal/spi_flash_ll.h
-components/hal/esp32c6/include/hal/spi_ll.h
-components/hal/esp32c6/include/hal/spimem_flash_ll.h
-components/hal/esp32h2/include/hal/aes_ll.h
-components/hal/esp32h2/include/hal/cache_ll.h
-components/hal/esp32h2/include/hal/ecc_ll.h
-components/hal/esp32h2/include/hal/ecdsa_ll.h
-components/hal/esp32h2/include/hal/gpspi_flash_ll.h
-components/hal/esp32h2/include/hal/i2c_ll.h
-components/hal/esp32h2/include/hal/ieee802154_ll.h
-components/hal/esp32h2/include/hal/mcpwm_ll.h
-components/hal/esp32h2/include/hal/mpi_ll.h
-components/hal/esp32h2/include/hal/mpu_ll.h
-components/hal/esp32h2/include/hal/pcnt_ll.h
-components/hal/esp32h2/include/hal/spi_flash_ll.h
-components/hal/esp32h2/include/hal/spi_ll.h
-components/hal/esp32h2/include/hal/spimem_flash_ll.h
-components/hal/esp32p4/include/hal/cache_ll.h
-components/hal/esp32p4/include/hal/clk_tree_ll.h
-components/hal/esp32p4/include/hal/ecc_ll.h
-components/hal/esp32p4/include/hal/gpspi_flash_ll.h
-components/hal/esp32p4/include/hal/i2c_ll.h
-components/hal/esp32p4/include/hal/mcpwm_ll.h
-components/hal/esp32p4/include/hal/mpi_ll.h
-components/hal/esp32p4/include/hal/mpu_ll.h
-components/hal/esp32p4/include/hal/pcnt_ll.h
-components/hal/esp32p4/include/hal/spi_flash_ll.h
-components/hal/esp32p4/include/hal/spimem_flash_ll.h
-components/hal/esp32s2/include/hal/aes_ll.h
-components/hal/esp32s2/include/hal/cache_ll.h
-components/hal/esp32s2/include/hal/dedic_gpio_ll.h
-components/hal/esp32s2/include/hal/gpspi_flash_ll.h
-components/hal/esp32s2/include/hal/i2c_ll.h
-components/hal/esp32s2/include/hal/ledc_ll.h
-components/hal/esp32s2/include/hal/memprot_peri_ll.h
-components/hal/esp32s2/include/hal/mpi_ll.h
-components/hal/esp32s2/include/hal/pcnt_ll.h
-components/hal/esp32s2/include/hal/spi_flash_ll.h
-components/hal/esp32s2/include/hal/spi_ll.h
-components/hal/esp32s2/include/hal/spimem_flash_ll.h
-components/hal/esp32s2/include/hal/touch_sensor_hal.h
-components/hal/esp32s2/include/hal/touch_sensor_ll.h
-components/hal/esp32s2/include/hal/usb_ll.h
-components/hal/esp32s2/include/hal/usb_phy_ll.h
-components/hal/esp32s3/include/hal/aes_ll.h
-components/hal/esp32s3/include/hal/cache_ll.h
-components/hal/esp32s3/include/hal/gpspi_flash_ll.h
-components/hal/esp32s3/include/hal/i2c_ll.h
-components/hal/esp32s3/include/hal/ledc_ll.h
-components/hal/esp32s3/include/hal/mcpwm_ll.h
-components/hal/esp32s3/include/hal/memprot_ll.h
-components/hal/esp32s3/include/hal/mpi_ll.h
-components/hal/esp32s3/include/hal/mspi_timing_tuning_ll.h
-components/hal/esp32s3/include/hal/pcnt_ll.h
-components/hal/esp32s3/include/hal/spi_flash_ll.h
-components/hal/esp32s3/include/hal/spi_ll.h
-components/hal/esp32s3/include/hal/spimem_flash_ll.h
-components/hal/esp32s3/include/hal/touch_sensor_hal.h
-components/hal/esp32s3/include/hal/touch_sensor_ll.h
-components/hal/esp32s3/include/hal/uhci_ll.h
-components/hal/esp32s3/include/hal/usb_ll.h
-components/hal/esp32s3/include/hal/usb_phy_ll.h
-components/hal/include/hal/adc_hal.h
-components/hal/include/hal/aes_hal.h
-components/hal/include/hal/assist_debug_hal.h
-components/hal/include/hal/i2c_hal.h
-components/hal/include/hal/ieee802154_common_ll.h
-components/hal/include/hal/ledc_hal.h
-components/hal/include/hal/sdio_slave_hal.h
-components/hal/include/hal/spi_flash_hal.h
-components/hal/include/hal/spi_hal.h
-components/hal/include/hal/spi_slave_hal.h
-components/hal/include/hal/spi_slave_hd_hal.h
 components/lwip/include/lwip/netdb.h
-components/soc/esp32c2/include/soc/ext_mem_defs.h
-components/soc/esp32c2/include/soc/mmu.h
-components/soc/esp32c3/include/soc/ext_mem_defs.h
-components/soc/esp32c3/include/soc/mmu.h
-components/soc/esp32c6/include/soc/ext_mem_defs.h
-components/soc/esp32c6/include/soc/mmu.h
-components/soc/esp32h2/include/soc/ext_mem_defs.h
-components/soc/esp32h2/include/soc/mmu.h
-components/soc/esp32p4/include/soc/ext_mem_defs.h
 components/spi_flash/include/esp_private/spi_flash_os.h
 
 ### To be fixed: files which don't compile for esp32s2 target:
@@ -275,4 +141,9 @@ components/espcoredump/include/port/xtensa/esp_core_dump_summary_port.h
 components/riscv/include/esp_private/panic_reason.h
 components/riscv/include/riscv/interrupt.h
 components/riscv/include/riscv/rvruntime-frames.h
-components/riscv/include/riscv/rvsleep-frames.h
+
+# should be private include, but 'private_include' is a subdir of public includes
+components/console/private_include/console_private.h
+
+# Missing extern "C"
+components/esp_driver_spi/include/esp_private/spi_master_internal.h

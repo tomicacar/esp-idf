@@ -74,13 +74,17 @@ I2S 时钟
 
 - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_DEFAULT`：默认 PLL 时钟。
 
-.. only:: not esp32h2
+.. only:: SOC_I2S_SUPPORTS_PLL_F160M
 
     - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_PLL_160M`：160 MHz PLL 时钟。
 
-.. only:: esp32h2
+.. only:: SOC_I2S_SUPPORTS_PLL_F96M
 
     - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_PLL_96M`：96 MHz PLL 时钟。
+
+.. only:: SOC_I2S_SUPPORTS_PLL_F240M
+
+    - :cpp:enumerator:`i2s_clock_src_t::I2S_CLK_SRC_PLL_240M`：240 MHz PLL 时钟。
 
 .. only:: SOC_I2S_SUPPORTS_APLL
 
@@ -116,6 +120,8 @@ ESP32-C3    I2S 0     I2S 0     无        I2S 0     无         无
 ESP32-C6    I2S 0     I2S 0     无        I2S 0     无         无
 ESP32-S3   I2S 0/1    I2S 0     I2S 0    I2S 0/1    无         无
 ESP32-H2    I2S 0     I2S 0     无        I2S 0     无         无
+ESP32-P4   I2S 0~2    I2S 0     I2S 0    I2S 0~2    无         无
+ESP32-C5    I2S 0     I2S 0     无        I2S 0     无         无
 =========  ========  ========  ========  ========  ========  ==========
 
 标准模式
@@ -196,7 +202,7 @@ ESP32-H2    I2S 0     I2S 0     无        I2S 0     无         无
     LCD/摄像头模式
     ^^^^^^^^^^^^^^^
 
-    LCD/摄像头模式只支持在 I2S0 上通过并行总线运行。在 LCD 模式下，I2S0 应当设置为主机 TX 模式；在摄像头模式下，I2S0 应当设置为从机 RX 模式。这两种模式不是由 I2S 驱动实现的，关于 LCD 模式的实现，请参阅 :doc:`/api-reference/peripherals/lcd`。更多信息请参考 **{IDF_TARGET_NAME} 技术参考手册** > **I2S 控制器 (I2S)** > LCD 模式 [`PDF <{IDF_TARGET_TRM_EN_URL}#camlcdctrl>`__]。
+    LCD/摄像头模式只支持在 I2S0 上通过并行总线运行。在 LCD 模式下，I2S0 应当设置为主机 TX 模式；在摄像头模式下，I2S0 应当设置为从机 RX 模式。这两种模式不是由 I2S 驱动实现的，关于 LCD 模式的实现，请参阅 :doc:`/api-reference/peripherals/lcd/i80_lcd`。更多信息请参考 **{IDF_TARGET_NAME} 技术参考手册** > **I2S 控制器 (I2S)** > LCD 模式 [`PDF <{IDF_TARGET_TRM_EN_URL}#camlcdctrl>`__]。
 
 .. only:: SOC_I2S_SUPPORTS_ADC_DAC
 
@@ -296,7 +302,7 @@ I2S 驱动例程请参考 :example:`peripherals/i2s` 目录。以下为每种模
 
 - :c:macro:`I2S_STD_CLK_DEFAULT_CONFIG`。
 
-请参考 :ref:`i2s-api-reference-i2s_std` 了解 STD API 的相关信息。更多细节请参考 :component_file:`driver/i2s/include/driver/i2s_std.h`。
+请参考 :ref:`i2s-api-reference-i2s_std` 了解 STD API 的相关信息。更多细节请参考 :component_file:`esp_driver_i2s/include/driver/i2s_std.h`。
 
 STD TX 模式
 ~~~~~~~~~~~~~
@@ -550,7 +556,7 @@ STD RX 模式
 
     - :c:macro:`I2S_PDM_TX_CLK_DEFAULT_CONFIG`
 
-    PDM TX API 的相关信息，可参考 :ref:`i2s-api-reference-i2s_pdm`。更多细节请参阅 :component_file:`driver/i2s/include/driver/i2s_pdm.h`。
+    PDM TX API 的相关信息，可参考 :ref:`i2s-api-reference-i2s_pdm`。更多细节请参阅 :component_file:`esp_driver_i2s/include/driver/i2s_pdm.h`。
 
     PDM 数据位宽固定为 16 位。如果 ``int16_t`` 写缓冲区中的数据如下：
 
@@ -646,7 +652,7 @@ STD RX 模式
 
     - :c:macro:`I2S_PDM_RX_CLK_DEFAULT_CONFIG`
 
-    PDM RX API 的相关信息，可参考 :ref:`i2s-api-reference-i2s_pdm`。更多细节请参阅 :component_file:`driver/i2s/include/driver/i2s_pdm.h`。
+    PDM RX API 的相关信息，可参考 :ref:`i2s-api-reference-i2s_pdm`。更多细节请参阅 :component_file:`esp_driver_i2s/include/driver/i2s_pdm.h`。
 
     PDM 数据位宽固定为 16 位。如果线路上的数据如下所示。为方便理解，已将线路上的数据格式由 PDM 转为 PCM。
 
@@ -732,7 +738,7 @@ STD RX 模式
 
     - :c:macro:`I2S_TDM_CLK_DEFAULT_CONFIG`
 
-    有关 TDM API 的信息，请参阅 :ref:`i2s-api-reference-i2s_tdm`。更多细节请参阅 :component_file:`driver/i2s/include/driver/i2s_tdm.h`。
+    有关 TDM API 的信息，请参阅 :ref:`i2s-api-reference-i2s_tdm`。更多细节请参阅 :component_file:`esp_driver_i2s/include/driver/i2s_tdm.h`。
 
     .. note::
 
@@ -1069,5 +1075,5 @@ I2S 驱动
 I2S 类型
 ^^^^^^^^
 
-.. include-build-file:: inc/components/driver/i2s/include/driver/i2s_types.inc
+.. include-build-file:: inc/components/esp_driver_i2s/include/driver/i2s_types.inc
 .. include-build-file:: inc/components/hal/include/hal/i2s_types.inc

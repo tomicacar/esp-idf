@@ -61,8 +61,8 @@ typedef enum {
     ETS_UART0_INTR_SOURCE,                      /**< interrupt of UART0, level*/
     ETS_UART1_INTR_SOURCE,                      /**< interrupt of UART1, level*/
     ETS_LEDC_INTR_SOURCE,                       /**< interrupt of LED PWM, level*/
-    ETS_TWAI0_INTR_SOURCE,                      /**< interrupt of can0, level*/
-    ETS_TWAI1_INTR_SOURCE,                      /**< interrupt of can1, level*/
+    ETS_TWAI0_INTR_SOURCE,                      /**< interrupt of twai0, level*/
+    ETS_TWAI1_INTR_SOURCE,                      /**< interrupt of twai1, level*/
     ETS_USB_SERIAL_JTAG_INTR_SOURCE,            /**< interrupt of USB, level*/
     ETS_RMT_INTR_SOURCE,                        /**< interrupt of remote controller, level*/
     ETS_I2C_EXT0_INTR_SOURCE,                   /**< interrupt of I2C controller1, level*/
@@ -72,11 +72,15 @@ typedef enum {
     ETS_TG1_T0_LEVEL_INTR_SOURCE,               /**< interrupt of TIMER_GROUP1, TIMER0, level*/
     ETS_TG1_T1_LEVEL_INTR_SOURCE,               /**< interrupt of TIMER_GROUP1, TIMER1, level*/
     ETS_TG1_WDT_LEVEL_INTR_SOURCE,              /**< interrupt of TIMER_GROUP1, WATCHDOG, level*/
-    ETS_SYSTIMER_TARGET0_EDGE_INTR_SOURCE,      /**< interrupt of system timer 0, EDGE*/
-    ETS_SYSTIMER_TARGET1_EDGE_INTR_SOURCE,      /**< interrupt of system timer 1, EDGE*/
-    ETS_SYSTIMER_TARGET2_EDGE_INTR_SOURCE,      /**< interrupt of system timer 2, EDGE*/
-    ETS_APB_ADC_INTR_SOURCE,                    /**< interrupt of APB ADC, LEVEL*/
-    ETS_MCPWM0_INTR_SOURCE,                     /**< interrupt of MCPWM0, LEVEL*/
+    ETS_SYSTIMER_TARGET0_INTR_SOURCE,           /**< interrupt of system timer 0 */
+    ETS_SYSTIMER_TARGET1_INTR_SOURCE,           /**< interrupt of system timer 1 */
+    ETS_SYSTIMER_TARGET2_INTR_SOURCE,           /**< interrupt of system timer 2 */
+    ETS_SYSTIMER_TARGET0_EDGE_INTR_SOURCE = ETS_SYSTIMER_TARGET0_INTR_SOURCE, /**< use ETS_SYSTIMER_TARGET0_INTR_SOURCE */
+    ETS_SYSTIMER_TARGET1_EDGE_INTR_SOURCE = ETS_SYSTIMER_TARGET1_INTR_SOURCE, /**< use ETS_SYSTIMER_TARGET1_INTR_SOURCE */
+    ETS_SYSTIMER_TARGET2_EDGE_INTR_SOURCE = ETS_SYSTIMER_TARGET2_INTR_SOURCE, /**< use ETS_SYSTIMER_TARGET2_INTR_SOURCE */
+    ETS_APB_ADC_INTR_SOURCE = 60,               /**< interrupt of APB ADC, LEVEL*/
+    ETS_TEMPERATURE_SENSOR_INTR_SOURCE = ETS_APB_ADC_INTR_SOURCE,
+    ETS_MCPWM0_INTR_SOURCE = 61,                     /**< interrupt of MCPWM0, LEVEL*/
     ETS_PCNT_INTR_SOURCE,
     ETS_PARL_IO_INTR_SOURCE,
     ETS_SLC0_INTR_SOURCE,

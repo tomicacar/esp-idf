@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: CC0-1.0
  *
@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "sdkconfig.h"
 #include "esp_check.h"
 #include "esp_err.h"
 #include "esp_event.h"
@@ -32,11 +33,9 @@
 #include "esp_vfs_dev.h"
 #include "esp_vfs_eventfd.h"
 #include "esp_wifi.h"
-#include "esp_coexist.h"
 #include "mdns.h"
 #include "nvs_flash.h"
 #include "protocol_examples_common.h"
-#include "sdkconfig.h"
 #include "driver/uart.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -45,7 +44,20 @@
 #include "openthread/logging.h"
 #include "openthread/tasklet.h"
 
+#if CONFIG_OPENTHREAD_STATE_INDICATOR_ENABLE
+#include "ot_led_strip.h"
+#endif
+
 #define TAG "esp_ot_br"
+
+#if CONFIG_EXTERNAL_COEX_ENABLE
+static void ot_br_external_coexist_init(void)
+{
+    esp_external_coex_gpio_set_t gpio_pin = ESP_OPENTHREAD_DEFAULT_EXTERNAL_COEX_CONFIG();
+    esp_external_coex_set_work_mode(EXTERNAL_COEX_LEADER_ROLE);
+    ESP_ERROR_CHECK(esp_enable_extern_coex_gpio_pin(CONFIG_EXTERNAL_COEX_WIRE_TYPE, gpio_pin));
+}
+#endif /* CONFIG_EXTERNAL_COEX_ENABLE */
 
 static void ot_task_worker(void *aContext)
 {
@@ -64,6 +76,9 @@ static void ot_task_worker(void *aContext)
 
     // Initialize border routing features
     esp_openthread_lock_acquire(portMAX_DELAY);
+#if CONFIG_OPENTHREAD_STATE_INDICATOR_ENABLE
+    ESP_ERROR_CHECK(esp_openthread_state_indicator_init(esp_openthread_get_instance()));
+#endif
     ESP_ERROR_CHECK(esp_netif_attach(openthread_netif, esp_openthread_netif_glue_init(&config)));
 
     (void)otLoggingSetLevel(CONFIG_LOG_DEFAULT_LEVEL);
@@ -84,8 +99,8 @@ static void ot_task_worker(void *aContext)
     esp_openthread_launch_mainloop();
 
     // Clean up
-    esp_netif_destroy(openthread_netif);
     esp_openthread_netif_glue_deinit();
+    esp_netif_destroy(openthread_netif);
     esp_vfs_eventfd_unregister();
     vTaskDelete(NULL);
 }
@@ -97,8 +112,10 @@ void app_main(void)
     // * task queue
     // * border router
     esp_vfs_eventfd_config_t eventfd_config = {
-#if CONFIG_OPENTHREAD_RADIO_NATIVE
+#if CONFIG_OPENTHREAD_RADIO_NATIVE || CONFIG_OPENTHREAD_RADIO_SPINEL_SPI
         // * radio driver (A native radio device needs a eventfd for radio driver.)
+        // * SpiSpinelInterface (The Spi Spinel Interface needs a eventfd.)
+        // The above will not exist at the same time.
         .max_fds = 4,
 #else
         .max_fds = 3,
@@ -118,6 +135,11 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_coex_wifi_i154_enable());
 #else
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+
+#if CONFIG_EXTERNAL_COEX_ENABLE
+    ot_br_external_coexist_init();
+#endif // CONFIG_EXTERNAL_COEX_ENABLE
+
 #endif
     esp_openthread_set_backbone_netif(get_example_netif());
 #else

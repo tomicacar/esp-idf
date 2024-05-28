@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -201,7 +201,7 @@ static inline void spi_flash_ll_program_page(spi_dev_t *dev, const void *buffer,
  *
  * @param dev Beginning address of the peripheral registers.
  */
-static inline void spi_flash_ll_user_start(spi_dev_t *dev)
+static inline void spi_flash_ll_user_start(spi_dev_t *dev, bool pe_ops)
 {
     dev->cmd.usr = 1;
 }
@@ -242,9 +242,10 @@ static inline void spi_flash_ll_set_cs_pin(spi_dev_t *dev, int pin)
  */
 static inline void spi_flash_ll_set_read_mode(spi_dev_t *dev, esp_flash_io_mode_t read_mode)
 {
-    typeof (dev->ctrl) ctrl = dev->ctrl;
-    ctrl.val &= ~(SPI_FREAD_QIO_M | SPI_FREAD_QUAD_M | SPI_FREAD_DIO_M | SPI_FREAD_DUAL_M);
-    ctrl.val |= SPI_FASTRD_MODE_M;
+    typeof (dev->ctrl) ctrl;
+    ctrl.val = dev->ctrl.val;
+    ctrl.val = ctrl.val & ~(SPI_FREAD_QIO_M | SPI_FREAD_QUAD_M | SPI_FREAD_DIO_M | SPI_FREAD_DUAL_M);
+    ctrl.val = ctrl.val | SPI_FASTRD_MODE_M;
     switch (read_mode) {
     case SPI_FLASH_FASTRD:
         //the default option
@@ -267,7 +268,7 @@ static inline void spi_flash_ll_set_read_mode(spi_dev_t *dev, esp_flash_io_mode_
     default:
         abort();
     }
-    dev->ctrl = ctrl;
+    dev->ctrl.val = ctrl.val;
 }
 
 /**
@@ -318,9 +319,10 @@ static inline void spi_flash_ll_set_command(spi_dev_t *dev, uint8_t command, uin
     dev->user.usr_command = 1;
     typeof(dev->user2) user2 = {
         .usr_command_value = command,
+        .reserved16 = 0,
         .usr_command_bitlen = (bitlen - 1),
     };
-    dev->user2 = user2;
+    dev->user2.val = user2.val;
 }
 
 /**
@@ -400,16 +402,6 @@ static inline void spi_flash_ll_set_cs_setup(spi_dev_t *dev, uint32_t cs_setup_t
 }
 
 /**
- * @brief Set lock for SPI0 so that spi0 can request new cache request after a cache transfer.
- *
- * @param dev Beginning address of the peripheral registers.
- */
-static inline void spi_flash_ll_set_pe_bit(spi_dev_t *dev)
-{
-    // Not supported on esp32
-}
-
-/**
  * Get the spi flash source clock frequency. Used for calculating
  * the divider parameters.
  *
@@ -453,6 +445,26 @@ static inline uint32_t spi_flash_ll_calculate_clock_reg(uint8_t host_id, uint8_t
 static inline void spi_flash_ll_set_extra_address(spi_dev_t *dev, uint32_t extra_addr)
 {
     // Not supported on ESP32.
+}
+
+/**
+ * @brief Write protect signal output when SPI is idle
+
+ * @param level 1: 1: output high, 0: output low
+ */
+static inline void spi_flash_ll_set_wp_level(spi_dev_t *dev, bool level)
+{
+    dev->ctrl.wp = level;
+}
+
+/**
+ * @brief Get the ctrl value of mspi
+ *
+ * @return uint32_t The value of ctrl register
+ */
+static inline uint32_t spi_flash_ll_get_ctrl_val(spi_dev_t *dev)
+{
+    return dev->ctrl.val;
 }
 
 #ifdef __cplusplus

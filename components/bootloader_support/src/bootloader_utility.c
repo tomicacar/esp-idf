@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2018-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2018-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -15,40 +15,7 @@
 #include "esp_rom_uart.h"
 #include "sdkconfig.h"
 #if CONFIG_IDF_TARGET_ESP32
-#include "soc/dport_reg.h"
 #include "esp32/rom/cache.h"
-#include "esp32/rom/secure_boot.h"
-#elif CONFIG_IDF_TARGET_ESP32S2
-#include "esp32s2/rom/secure_boot.h"
-#elif CONFIG_IDF_TARGET_ESP32S3
-#include "esp32s3/rom/secure_boot.h"
-#elif CONFIG_IDF_TARGET_ESP32C3
-#include "esp32c3/rom/efuse.h"
-#include "esp32c3/rom/crc.h"
-#include "esp32c3/rom/uart.h"
-#include "esp32c3/rom/secure_boot.h"
-#elif CONFIG_IDF_TARGET_ESP32C2
-#include "esp32c2/rom/efuse.h"
-#include "esp32c2/rom/crc.h"
-#include "esp32c2/rom/rtc.h"
-#include "esp32c2/rom/uart.h"
-#include "esp32c2/rom/secure_boot.h"
-#elif CONFIG_IDF_TARGET_ESP32C6
-#include "esp32c6/rom/efuse.h"
-#include "esp32c6/rom/crc.h"
-#include "esp32c6/rom/rtc.h"
-#include "esp32c6/rom/uart.h"
-#include "esp32c6/rom/secure_boot.h"
-#elif CONFIG_IDF_TARGET_ESP32H2
-#include "esp32h2/rom/efuse.h"
-#include "esp32h2/rom/crc.h"
-#include "esp32h2/rom/rtc.h"
-#include "esp32h2/rom/uart.h"
-#include "esp32h2/rom/secure_boot.h"
-#elif CONFIG_IDF_TARGET_ESP32P4
-
-#else // CONFIG_IDF_TARGET_*
-#error "Unsupported IDF_TARGET"
 #endif
 #include "esp_rom_spiflash.h"
 
@@ -58,6 +25,7 @@
 #include "soc/rtc_periph.h"
 #include "soc/timer_periph.h"
 #include "hal/mmu_hal.h"
+#include "hal/mmu_ll.h"
 #include "hal/cache_types.h"
 #include "hal/cache_ll.h"
 #include "hal/cache_hal.h"
@@ -67,6 +35,9 @@
 #include "esp_app_desc.h"
 #include "esp_secure_boot.h"
 #include "esp_flash_encrypt.h"
+#ifndef BOOTLOADER_BUILD
+#include "spi_flash_mmap.h"
+#endif
 #include "esp_flash_partitions.h"
 #include "bootloader_flash_priv.h"
 #include "bootloader_random.h"
@@ -76,6 +47,7 @@
 #include "bootloader_sha.h"
 #include "bootloader_console.h"
 #include "bootloader_soc.h"
+#include "bootloader_memory_utils.h"
 #include "esp_efuse.h"
 #include "esp_fault.h"
 
@@ -449,8 +421,7 @@ static bool try_load_partition(const esp_partition_pos_t *partition, esp_image_m
     }
 #ifdef BOOTLOADER_BUILD
     if (bootloader_load_image(partition, data) == ESP_OK) {
-        ESP_LOGI(TAG, "Loaded app from partition at offset 0x%x",
-                 partition->offset);
+        ESP_LOGI(TAG, "Loaded app from partition at offset 0x%" PRIx32, partition->offset);
         return true;
     }
 #endif
@@ -714,7 +685,7 @@ static void load_image(const esp_image_metadata_t *image_data)
            so issue a system reset to ensure flash encryption
            cache resets properly */
         ESP_LOGI(TAG, "Resetting with flash encryption enabled...");
-        esp_rom_uart_tx_wait_idle(0);
+        esp_rom_output_tx_wait_idle(0);
         bootloader_reset();
     }
 #endif
@@ -749,10 +720,20 @@ static void unpack_load_app(const esp_image_metadata_t *data)
     // Find DROM & IROM addresses, to configure MMU mappings
     for (int i = 0; i < data->image.segment_count; i++) {
         const esp_image_segment_header_t *header = &data->segments[i];
+        bool text_or_rodata = false;
+
         //`SOC_DROM_LOW` and `SOC_DROM_HIGH` are the same as `SOC_IROM_LOW` and `SOC_IROM_HIGH`, reasons are in above `note`
         if (header->load_addr >= SOC_DROM_LOW && header->load_addr < SOC_DROM_HIGH) {
+            text_or_rodata = true;
+        }
+#if SOC_MMU_PER_EXT_MEM_TARGET
+        if (header->load_addr >= SOC_EXTRAM_LOW && header->load_addr < SOC_EXTRAM_HIGH) {
+            text_or_rodata = true;
+        }
+#endif
+        if (text_or_rodata) {
             /**
-             * D/I are shared, but there should not be a third segment on flash
+             * D/I are shared, but there should not be a third segment on flash/psram
              */
             assert(rom_index < 2);
             rom_addr[rom_index] = data->segment_data[i];
@@ -819,6 +800,20 @@ static void unpack_load_app(const esp_image_metadata_t *data)
 }
 #endif  //#if SOC_MMU_DI_VADDR_SHARED
 
+//unused for esp32
+__attribute__((unused))
+static bool s_flash_seg_needs_map(uint32_t vaddr)
+{
+#if SOC_MMU_PER_EXT_MEM_TARGET
+    //For these chips, segments on PSRAM will be mapped in app
+    bool is_psram = esp_ptr_in_extram((void *)vaddr);
+    return !is_psram;
+#else
+    //For these chips, segments on Flash always need to be mapped
+    return true;
+#endif
+}
+
 static void set_cache_and_start_app(
     uint32_t drom_addr,
     uint32_t drom_load_addr,
@@ -836,7 +831,7 @@ static void set_cache_and_start_app(
     Cache_Read_Disable(0);
     Cache_Flush(0);
 #else
-    cache_hal_disable(CACHE_TYPE_ALL);
+    cache_hal_disable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
 #endif
     //reset MMU table first
     mmu_hal_unmap_all();
@@ -844,7 +839,7 @@ static void set_cache_and_start_app(
     //-----------------------MAP DROM--------------------------
     uint32_t drom_load_addr_aligned = drom_load_addr & MMU_FLASH_MASK;
     uint32_t drom_addr_aligned = drom_addr & MMU_FLASH_MASK;
-    ESP_EARLY_LOGV(TAG, "rodata starts from paddr=0x%08x, vaddr=0x%08x, size=0x%x", drom_addr, drom_load_addr, drom_size);
+    ESP_EARLY_LOGV(TAG, "rodata starts from paddr=0x%08" PRIx32 ", vaddr=0x%08" PRIx32 ", size=0x%" PRIx32, drom_addr, drom_load_addr, drom_size);
     //The addr is aligned, so we add the mask off length to the size, to make sure the corresponding buses are enabled.
     drom_size = (drom_load_addr - drom_load_addr_aligned) + drom_size;
 #if CONFIG_IDF_TARGET_ESP32
@@ -853,17 +848,22 @@ static void set_cache_and_start_app(
     ESP_EARLY_LOGV(TAG, "rc=%d", rc);
     rc = cache_flash_mmu_set(1, 0, drom_load_addr_aligned, drom_addr_aligned, 64, drom_page_count);
     ESP_EARLY_LOGV(TAG, "rc=%d", rc);
-    ESP_EARLY_LOGV(TAG, "after mapping rodata, starting from paddr=0x%08x and vaddr=0x%08x, 0x%x bytes are mapped", drom_addr_aligned, drom_load_addr_aligned, drom_page_count * SPI_FLASH_MMU_PAGE_SIZE);
+    ESP_EARLY_LOGV(TAG, "after mapping rodata, starting from paddr=0x%08" PRIx32 " and vaddr=0x%08" PRIx32 ", 0x%" PRIx32 " bytes are mapped", drom_addr_aligned, drom_load_addr_aligned, drom_page_count * SPI_FLASH_MMU_PAGE_SIZE);
 #else
     uint32_t actual_mapped_len = 0;
-    mmu_hal_map_region(0, MMU_TARGET_FLASH0, drom_load_addr_aligned, drom_addr_aligned, drom_size, &actual_mapped_len);
-    ESP_EARLY_LOGV(TAG, "after mapping rodata, starting from paddr=0x%08x and vaddr=0x%08x, 0x%x bytes are mapped", drom_addr_aligned, drom_load_addr_aligned, actual_mapped_len);
+    if (s_flash_seg_needs_map(drom_load_addr_aligned)) {
+        mmu_hal_map_region(0, MMU_TARGET_FLASH0, drom_load_addr_aligned, drom_addr_aligned, drom_size, &actual_mapped_len);
+        ESP_EARLY_LOGV(TAG, "after mapping rodata, starting from paddr=0x%08" PRIx32 " and vaddr=0x%08" PRIx32 ", 0x%" PRIx32 " bytes are mapped", drom_addr_aligned, drom_load_addr_aligned, actual_mapped_len);
+    }
+    //we use the MMU_LL_END_DROM_ENTRY_ID mmu entry as a map page for app to find the boot partition
+    mmu_hal_map_region(0, MMU_TARGET_FLASH0, MMU_LL_END_DROM_ENTRY_VADDR, drom_addr_aligned, CONFIG_MMU_PAGE_SIZE, &actual_mapped_len);
+    ESP_EARLY_LOGV(TAG, "mapped one page of the rodata, from paddr=0x%08" PRIx32 " and vaddr=0x%08" PRIx32 ", 0x%" PRIx32 " bytes are mapped", drom_addr_aligned, drom_load_addr_aligned, actual_mapped_len);
 #endif
 
     //-----------------------MAP IROM--------------------------
     uint32_t irom_load_addr_aligned = irom_load_addr & MMU_FLASH_MASK;
     uint32_t irom_addr_aligned = irom_addr & MMU_FLASH_MASK;
-    ESP_EARLY_LOGV(TAG, "text starts from paddr=0x%08x, vaddr=0x%08x, size=0x%x", irom_addr, irom_load_addr, irom_size);
+    ESP_EARLY_LOGV(TAG, "text starts from paddr=0x%08" PRIx32 ", vaddr=0x%08" PRIx32 ", size=0x%" PRIx32, irom_addr, irom_load_addr, irom_size);
     //The addr is aligned, so we add the mask off length to the size, to make sure the corresponding buses are enabled.
     irom_size = (irom_load_addr - irom_load_addr_aligned) + irom_size;
 #if CONFIG_IDF_TARGET_ESP32
@@ -872,10 +872,12 @@ static void set_cache_and_start_app(
     ESP_EARLY_LOGV(TAG, "rc=%d", rc);
     rc = cache_flash_mmu_set(1, 0, irom_load_addr_aligned, irom_addr_aligned, 64, irom_page_count);
     ESP_LOGV(TAG, "rc=%d", rc);
-    ESP_EARLY_LOGV(TAG, "after mapping text, starting from paddr=0x%08x and vaddr=0x%08x, 0x%x bytes are mapped", irom_addr_aligned, irom_load_addr_aligned, irom_page_count * SPI_FLASH_MMU_PAGE_SIZE);
+    ESP_EARLY_LOGV(TAG, "after mapping text, starting from paddr=0x%08" PRIx32 " and vaddr=0x%08" PRIx32 ", 0x%" PRIx32 " bytes are mapped", irom_addr_aligned, irom_load_addr_aligned, irom_page_count * SPI_FLASH_MMU_PAGE_SIZE);
 #else
-    mmu_hal_map_region(0, MMU_TARGET_FLASH0, irom_load_addr_aligned, irom_addr_aligned, irom_size, &actual_mapped_len);
-    ESP_EARLY_LOGV(TAG, "after mapping text, starting from paddr=0x%08x and vaddr=0x%08x, 0x%x bytes are mapped", irom_addr_aligned, irom_load_addr_aligned, actual_mapped_len);
+    if (s_flash_seg_needs_map(irom_load_addr_aligned)) {
+        mmu_hal_map_region(0, MMU_TARGET_FLASH0, irom_load_addr_aligned, irom_addr_aligned, irom_size, &actual_mapped_len);
+        ESP_EARLY_LOGW(TAG, "after mapping text, starting from paddr=0x%08" PRIx32 " and vaddr=0x%08" PRIx32 ", 0x%" PRIx32 " bytes are mapped", irom_addr_aligned, irom_load_addr_aligned, actual_mapped_len);
+    }
 #endif
 
     //----------------------Enable corresponding buses----------------
@@ -884,7 +886,7 @@ static void set_cache_and_start_app(
     bus_mask = cache_ll_l1_get_bus(0, irom_load_addr_aligned, irom_size);
     cache_ll_l1_enable_bus(0, bus_mask);
 
-#if !CONFIG_FREERTOS_UNICORE
+#if !CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE
     bus_mask = cache_ll_l1_get_bus(1, drom_load_addr_aligned, drom_size);
     cache_ll_l1_enable_bus(1, bus_mask);
     bus_mask = cache_ll_l1_get_bus(1, irom_load_addr_aligned, irom_size);
@@ -896,7 +898,7 @@ static void set_cache_and_start_app(
     // Application will need to do Cache_Flush(1) and Cache_Read_Enable(1)
     Cache_Read_Enable(0);
 #else
-    cache_hal_enable(CACHE_TYPE_ALL);
+    cache_hal_enable(CACHE_LL_LEVEL_EXT_MEM, CACHE_TYPE_ALL);
 #endif
 
     ESP_LOGD(TAG, "start: 0x%08"PRIx32, entry_addr);

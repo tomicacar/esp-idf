@@ -337,7 +337,7 @@ The map file itself is broken into parts and each part has a heading. The parts 
     - If you are wondering why some object file in particular was included in the binary, this part may give a clue. This part can be used in conjunction with the ``Cross Reference Table`` at the end of the file.
 
     .. note::
-        
+
         Not every object file shown in this list ends up included in the final binary, some end up in the ``Discarded input sections`` list instead.
 
 - ``Allocating common symbols``
@@ -382,6 +382,7 @@ The following configuration options reduces the final binary size of almost any 
 
     - Set :ref:`CONFIG_COMPILER_OPTIMIZATION` to ``Optimize for size (-Os)``. In some cases, ``Optimize for performance (-O2)`` will also reduce the binary size compared to the default. Note that if your code contains C or C++ Undefined Behavior then increasing the compiler optimization level may expose bugs that otherwise do not happen.
     - Reduce the compiled-in log output by lowering the app :ref:`CONFIG_LOG_DEFAULT_LEVEL`. If the :ref:`CONFIG_LOG_MAXIMUM_LEVEL` is changed from the default then this setting controls the binary size instead. Reducing compiled-in logging reduces the number of strings in the binary, and also the code size of the calls to logging functions.
+    - If your application doesn't require dynamic log level changes and you do not need to control logs per module using tags, consider disabling :ref:`CONFIG_LOG_DYNAMIC_LEVEL_CONTROL` and changing :ref:`CONFIG_LOG_TAG_LEVEL_IMPL`. It reduces IRAM usage by approximately 260 bytes, DRAM usage by approximately 264 bytes, and Flash usage by approximately 1K bytes compared to the default option, it also speeds up logging.
     - Set the :ref:`CONFIG_COMPILER_OPTIMIZATION_ASSERTION_LEVEL` to ``Silent``. This avoids compiling in a dedicated assertion string and source file name for each assert that may fail. It is still possible to find the failed assert in the code by looking at the memory address where the assertion failed.
     - Besides the :ref:`CONFIG_COMPILER_OPTIMIZATION_ASSERTION_LEVEL`, you can disable or silent the assertion for the HAL component separately by setting :ref:`CONFIG_HAL_DEFAULT_ASSERTION_LEVEL`. It is to notice that ESP-IDF lowers the HAL assertion level in bootloader to be silent even if :ref:`CONFIG_HAL_DEFAULT_ASSERTION_LEVEL` is set to full-assertion level. This is to reduce the bootloader size.
     - Setting :ref:`CONFIG_COMPILER_OPTIMIZATION_CHECKS_SILENT` removes specific error messages for particular internal ESP-IDF error check macros. This may make it harder to debug some error conditions by reading the log output.
@@ -390,7 +391,7 @@ The following configuration options reduces the final binary size of almost any 
     - Do not enable :ref:`CONFIG_COMPILER_CXX_EXCEPTIONS`, :ref:`CONFIG_COMPILER_CXX_RTTI`, or set the :ref:`CONFIG_COMPILER_STACK_CHECK_MODE` to Overall. All of these options are already disabled by default, but they have a large impact on binary size.
     - Disabling :ref:`CONFIG_ESP_ERR_TO_NAME_LOOKUP` removes the lookup table to translate user-friendly names for error values (see :doc:`/api-guides/error-handling`) in error logs, etc. This saves some binary size, but error values will be printed as integers only.
     - Setting :ref:`CONFIG_ESP_SYSTEM_PANIC` to ``Silent reboot`` saves a small amount of binary size, however this is **only** recommended if no one will use UART output to debug the device.
-    :CONFIG_IDF_TARGET_ARCH_RISCV: - Seting :ref:`CONFIG_COMPILER_SAVE_RESTORE_LIBCALLS` reduces binary size by replacing inlined prologues/epilogues with library calls.
+    :CONFIG_IDF_TARGET_ARCH_RISCV: - Setting :ref:`CONFIG_COMPILER_SAVE_RESTORE_LIBCALLS` reduces binary size by replacing inlined prologues/epilogues with library calls.
     - If the application binary uses only one of the security versions of the protocomm component, then the support for others can be disabled to save some code size. The support can be disabled through :ref:`CONFIG_ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_0`, :ref:`CONFIG_ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_1` or :ref:`CONFIG_ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_2` respectively.
 
 .. note::
@@ -411,6 +412,7 @@ The following binary size optimizations apply to a particular component or a fun
 
     - Disabling :ref:`CONFIG_ESP_WIFI_ENABLE_WPA3_SAE` will save some Wi-Fi binary size if WPA3 support is not needed. Note that WPA3 is mandatory for new Wi-Fi device certifications.
     - Disabling :ref:`CONFIG_ESP_WIFI_SOFTAP_SUPPORT` will save some Wi-Fi binary size if soft-AP support is not needed.
+    - Disabling :ref:`CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT` will save some Wi-Fi binary size if enterprise support is not needed.
 
 .. only:: esp32
 
@@ -440,7 +442,7 @@ lwIP IPv6
 
   .. note::
 
-      IPv6 is required by some components such as ``coap`` and :doc:`/api-reference/protocols/asio`. These components will not be available if IPV6 is disabled.
+      IPv6 is required by some components such as :doc:`/api-reference/protocols/asio`. These components will not be available if IPV6 is disabled.
 
 lwIP IPv4
 @@@@@@@@@
@@ -504,8 +506,9 @@ These include:
 - :ref:`CONFIG_MBEDTLS_ECP_C` (Alternatively: Leave this option enabled but disable some of the elliptic curves listed in the sub-menu.)
 - :ref:`CONFIG_MBEDTLS_ECP_NIST_OPTIM`
 - :ref:`CONFIG_MBEDTLS_ECP_FIXED_POINT_OPTIM`
-- Change :ref:`CONFIG_MBEDTLS_TLS_MODE` if both server & client functionalities are not needed
-- Consider disabling some cipher suites listed in the ``TLS Key Exchange Methods`` sub-menu (i.e., :ref:`CONFIG_MBEDTLS_KEY_EXCHANGE_RSA`)
+- Change :ref:`CONFIG_MBEDTLS_TLS_MODE` if both server & client functionalities are not needed.
+- Consider disabling some cipher suites listed in the ``TLS Key Exchange Methods`` sub-menu (i.e., :ref:`CONFIG_MBEDTLS_KEY_EXCHANGE_RSA`).
+- Consider disabling :ref:`CONFIG_MBEDTLS_ERROR_STRINGS` if the application is already pulling in mbedTLS error strings through using :cpp:func:`mbedtls_strerror`.
 
 The help text for each option has some more information for reference.
 
@@ -517,6 +520,11 @@ The help text for each option has some more information for reference.
    - Ensure that any TLS client(s) that connect to the device can still connect with supported/recommended cipher suites. Note that future versions of client operating systems may remove support for some features, so it is recommended to enable multiple supported cipher suites, or algorithms for redundancy.
 
    If depending on third party clients or servers, always pay attention to announcements about future changes to supported TLS features. If not, the {IDF_TARGET_NAME} device may become inaccessible if support changes.
+
+.. only:: CONFIG_ESP_ROM_HAS_MBEDTLS_CRYPTO_LIB
+
+   Enabling the config option :ref:`CONFIG_MBEDTLS_USE_CRYPTO_ROM_IMPL` will use the crypto algorithms from mbedTLS library inside the chip ROM.
+   Disabling the config option :ref:`CONFIG_MBEDTLS_USE_CRYPTO_ROM_IMPL` will use the crypto algorithms from the ESP-IDF mbedtls component library. This will increase the binary size (flash footprint).
 
 .. note::
 
@@ -560,6 +568,3 @@ IRAM Binary Size
 ----------------
 
 If the IRAM section of a binary is too large, this issue can be resolved by reducing IRAM memory usage. See :ref:`optimize-iram-usage`.
-
-
-

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -46,7 +46,11 @@
 #include "esp_types.h"
 #include "esp_err.h"
 #include "soc/soc_caps.h"
+#if SOC_GDMA_SUPPORTED
+#include "soc/gdma_channel.h"
+#endif
 #include "hal/spi_types.h"
+#include "hal/dma_types.h"
 #if SOC_GPSPI_SUPPORTED
 #include "hal/spi_ll.h"
 #endif
@@ -57,23 +61,30 @@ extern "C" {
 
 #if SOC_GPSPI_SUPPORTED
 
+//NOTE!! If both A and B are not defined, '#if (A==B)' is true, because GCC use 0 stand for undefined symbol
+#if !defined(SOC_GDMA_TRIG_PERIPH_SPI2_BUS)
+typedef dma_descriptor_align4_t spi_dma_desc_t;
+#else
+#if defined(SOC_GDMA_BUS_AXI) && (SOC_GDMA_TRIG_PERIPH_SPI2_BUS == SOC_GDMA_BUS_AXI)
+typedef dma_descriptor_align8_t spi_dma_desc_t;
+#elif defined(SOC_GDMA_BUS_AHB) && (SOC_GDMA_TRIG_PERIPH_SPI2_BUS == SOC_GDMA_BUS_AHB)
+typedef dma_descriptor_align4_t spi_dma_desc_t;
+#endif
+#endif
+
 /**
  * @brief Type of dma descriptor with appended members
  *        this structure inherits DMA descriptor, with a pointer to the transaction descriptor passed from users.
  */
 typedef struct {
-    lldesc_t      desc;                             ///< DMA descriptor
-    void          *arg;                             ///< This points to the transaction descriptor user passed in
+    spi_dma_desc_t  *desc;                            ///< DMA descriptor
+    void            *arg;                             ///< This points to the transaction descriptor user passed in
 } spi_slave_hd_hal_desc_append_t;
 
 /// Configuration of the HAL
 typedef struct {
     uint32_t      host_id;                          ///< Host ID of the spi peripheral
-    spi_dma_dev_t *dma_in;                          ///< Input  DMA(DMA -> RAM) peripheral register address
-    spi_dma_dev_t *dma_out;                         ///< Output DMA(RAM -> DMA) peripheral register address
     bool          dma_enabled;                      ///< DMA enabled or not
-    uint32_t      tx_dma_chan;                      ///< TX DMA channel used.
-    uint32_t      rx_dma_chan;                      ///< RX DMA channel used.
     bool          append_mode;                      ///< True for DMA append mode, false for segment mode
     uint32_t      spics_io_num;                     ///< CS GPIO pin for this device
     uint8_t       mode;                             ///< SPI mode (0-3)
@@ -95,23 +106,18 @@ typedef struct {
 
     /* address of the hardware */
     spi_dev_t                       *dev;                   ///< Beginning address of the peripheral registers.
-    spi_dma_dev_t                   *dma_in;                ///< Address of the DMA peripheral registers which stores the data received from a peripheral into RAM.
-    spi_dma_dev_t                   *dma_out;               ///< Address of the DMA peripheral registers which transmits the data from RAM to a peripheral.
     bool                            dma_enabled;            ///< DMA enabled or not
-    uint32_t                        tx_dma_chan;            ///< TX DMA channel used.
-    uint32_t                        rx_dma_chan;            ///< RX DMA channel used.
     bool                            append_mode;            ///< True for DMA append mode, false for segment mode
     uint32_t                        dma_desc_num;           ///< Number of the available DMA descriptors. Calculated from ``bus_max_transfer_size``.
+    uint32_t                        current_eof_addr;
     spi_slave_hd_hal_desc_append_t  *tx_cur_desc;           ///< Current TX DMA descriptor that could be linked (set up).
     spi_slave_hd_hal_desc_append_t  *tx_dma_head;           ///< Head of the linked TX DMA descriptors which are not used by hardware
     spi_slave_hd_hal_desc_append_t  *tx_dma_tail;           ///< Tail of the linked TX DMA descriptors which are not used by hardware
-    spi_slave_hd_hal_desc_append_t  tx_dummy_head;          ///< Dummy descriptor for ``tx_dma_head`` to start
     uint32_t                        tx_used_desc_cnt;       ///< Number of the TX descriptors that have been setup
     uint32_t                        tx_recycled_desc_cnt;   ///< Number of the TX descriptors that could be recycled
     spi_slave_hd_hal_desc_append_t  *rx_cur_desc;           ///< Current RX DMA descriptor that could be linked (set up).
     spi_slave_hd_hal_desc_append_t  *rx_dma_head;           ///< Head of the linked RX DMA descriptors which are not used by hardware
     spi_slave_hd_hal_desc_append_t  *rx_dma_tail;           ///< Tail of the linked RX DMA descriptors which are not used by hardware
-    spi_slave_hd_hal_desc_append_t  rx_dummy_head;          ///< Dummy descriptor for ``rx_dma_head`` to start
     uint32_t                        rx_used_desc_cnt;       ///< Number of the RX descriptors that have been setup
     uint32_t                        rx_recycled_desc_cnt;   ///< Number of the RX descriptors that could be recycled
 
@@ -128,23 +134,6 @@ typedef struct {
  * @param hal_config Configuration of the HAL
  */
 void spi_slave_hd_hal_init(spi_slave_hd_hal_context_t *hal, const spi_slave_hd_hal_config_t *hal_config);
-
-/**
- * @brief Get the size of one DMA descriptor
- *
- * @param hal       Context of the HAL layer
- * @param bus_size  SPI bus maximum transfer size, in bytes.
- * @return          Total size needed for all the DMA descriptors
- */
-uint32_t spi_slave_hd_hal_get_total_desc_size(spi_slave_hd_hal_context_t *hal, uint32_t bus_size);
-
-/**
- * @brief Get the actual bus size
- *
- * @param hal       Context of the HAL layer
- * @return          Actual bus transaction size
- */
-uint32_t spi_salve_hd_hal_get_max_bus_size(spi_slave_hd_hal_context_t *hal);
 
 /**
  * @brief Check and clear signal of one event
@@ -169,7 +158,7 @@ bool spi_slave_hd_hal_check_clear_event(spi_slave_hd_hal_context_t* hal, spi_eve
 bool spi_slave_hd_hal_check_disable_event(spi_slave_hd_hal_context_t* hal, spi_event_t ev);
 
 /**
- * @brief Enable to invole the ISR of corresponding event.
+ * @brief Enable to involve the ISR of corresponding event.
  *
  * @note The function, compared with :cpp:func:`spi_slave_hd_hal_enable_event_intr`, contains a
  *       workaround to force trigger the interrupt, even if the interrupt source cannot be initialized
@@ -198,7 +187,7 @@ void spi_slave_hd_hal_enable_event_intr(spi_slave_hd_hal_context_t* hal, spi_eve
  * @param[out] out_buf  Buffer to receive the data
  * @param len       Maximul length to receive
  */
-void spi_slave_hd_hal_rxdma(spi_slave_hd_hal_context_t *hal, uint8_t *out_buf, size_t len);
+void spi_slave_hd_hal_rxdma(spi_slave_hd_hal_context_t *hal);
 
 /**
  * @brief Get the length of total received data
@@ -207,6 +196,13 @@ void spi_slave_hd_hal_rxdma(spi_slave_hd_hal_context_t *hal, uint8_t *out_buf, s
  * @return          The received length
  */
 int spi_slave_hd_hal_rxdma_seg_get_len(spi_slave_hd_hal_context_t *hal);
+
+/**
+ * @brief Prepare hardware for a new dma rx trans
+ *
+ * @param hal       Context of the HAL layer
+ */
+void spi_slave_hd_hal_hw_prepare_rx(spi_slave_hd_hal_context_t *hal);
 
 ////////////////////////////////////////////////////////////////////////////////
 // TX DMA
@@ -218,7 +214,14 @@ int spi_slave_hd_hal_rxdma_seg_get_len(spi_slave_hd_hal_context_t *hal);
  * @param data      Buffer of data to send
  * @param len       Size of the buffer, also the maximum length to send
  */
-void spi_slave_hd_hal_txdma(spi_slave_hd_hal_context_t *hal, uint8_t *data, size_t len);
+void spi_slave_hd_hal_txdma(spi_slave_hd_hal_context_t *hal);
+
+/**
+ * @brief Prepare hardware for a new dma tx trans
+ *
+ * @param hal       Context of the HAL layer
+ */
+void spi_slave_hd_hal_hw_prepare_tx(spi_slave_hd_hal_context_t *hal);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shared buffer
@@ -227,7 +230,7 @@ void spi_slave_hd_hal_txdma(spi_slave_hd_hal_context_t *hal, uint8_t *data, size
  * @brief Read from the shared register buffer
  *
  * @param hal       Context of the HAL layer
- * @param addr      Address of the shared regsiter to read
+ * @param addr      Address of the shared register to read
  * @param out_data  Buffer to store the read data
  * @param len       Length to read from the shared buffer
  */
@@ -272,9 +275,10 @@ int spi_slave_hd_hal_get_last_addr(spi_slave_hd_hal_context_t *hal);
  *
  * @param hal            Context of the HAL layer
  * @param out_trans      Pointer to the caller-defined transaction
+ * @param real_buff_addr Actually data buffer head the HW used
  * @return               1: Transaction is finished; 0: Transaction is not finished
  */
-bool spi_slave_hd_hal_get_tx_finished_trans(spi_slave_hd_hal_context_t *hal, void **out_trans);
+bool spi_slave_hd_hal_get_tx_finished_trans(spi_slave_hd_hal_context_t *hal, void **out_trans, void **real_buff_addr);
 
 /**
  * @brief Return the finished RX transaction
@@ -285,10 +289,11 @@ bool spi_slave_hd_hal_get_tx_finished_trans(spi_slave_hd_hal_context_t *hal, voi
  *
  * @param hal            Context of the HAL layer
  * @param out_trans      Pointer to the caller-defined transaction
+ * @param real_buff_addr Actually data buffer head the HW used
  * @param out_len        Actual number of bytes of received data
  * @return               1: Transaction is finished; 0: Transaction is not finished
  */
-bool spi_slave_hd_hal_get_rx_finished_trans(spi_slave_hd_hal_context_t *hal, void **out_trans, size_t *out_len);
+bool spi_slave_hd_hal_get_rx_finished_trans(spi_slave_hd_hal_context_t *hal, void **out_trans, void **real_buff_addr, size_t *out_len);
 
 /**
  * @brief Load the TX DMA descriptors without stopping the DMA
@@ -296,7 +301,7 @@ bool spi_slave_hd_hal_get_rx_finished_trans(spi_slave_hd_hal_context_t *hal, voi
  * @param hal            Context of the HAL layer
  * @param data           Buffer of the transaction data
  * @param len            Length of the data
- * @param arg            Pointer used by the caller to indicate the tranaction. Will be returned by ``spi_slave_hd_hal_get_tx_finished_trans`` when transaction is finished
+ * @param arg            Pointer used by the caller to indicate the transaction. Will be returned by ``spi_slave_hd_hal_get_tx_finished_trans`` when transaction is finished
  * @return
  *        - ESP_OK: on success
  *        - ESP_ERR_INVALID_STATE: Function called in invalid state.
@@ -309,7 +314,7 @@ esp_err_t spi_slave_hd_hal_txdma_append(spi_slave_hd_hal_context_t *hal, uint8_t
  * @param hal            Context of the HAL layer
  * @param data           Buffer of the transaction data
  * @param len            Length of the data
- * @param arg            Pointer used by the caller to indicate the tranaction. Will be returned by ``spi_slave_hd_hal_get_rx_finished_trans`` when transaction is finished
+ * @param arg            Pointer used by the caller to indicate the transaction. Will be returned by ``spi_slave_hd_hal_get_rx_finished_trans`` when transaction is finished
  * @return
  *        - ESP_OK: on success
  *        - ESP_ERR_INVALID_STATE: Function called in invalid state.

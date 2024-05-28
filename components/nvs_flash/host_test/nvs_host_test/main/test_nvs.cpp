@@ -1,9 +1,9 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "catch.hpp"
+#include <catch2/catch_test_macros.hpp>
 #include "nvs.hpp"
 #include "sdkconfig.h"
 #include "nvs_partition_manager.hpp"
@@ -25,6 +25,18 @@
 #define TEMPORARILY_DISABLED(x)
 
 #define WD_PREFIX "./components/nvs_flash/host_test/nvs_host_test/" // path from ci cwd to the location of host test
+
+#if defined(SEGGER_H) && defined(GLOBAL_H)
+NVS_GUARD_SYSVIEW_MACRO_EXPANSION_PUSH();
+#undef U8
+#undef I8
+#undef U16
+#undef I16
+#undef U32
+#undef I32
+#undef U64
+#undef I64
+#endif
 
 stringstream s_perf;
 
@@ -92,7 +104,7 @@ TEST_CASE("Page reading with different type causes type mismatch error", "[nvs]"
     CHECK(page.readItem(1, nvs::ItemType::U32, "intval1", &val, sizeof(val)) == ESP_ERR_NVS_TYPE_MISMATCH);
 }
 
-TEST_CASE("Page when erased, it's state becomes UNITIALIZED", "[nvs]")
+TEST_CASE("Page when erased, it's state becomes UNINITIALIZED", "[nvs]")
 {
     PartitionEmulationFixture f;
     nvs::Page page;
@@ -383,7 +395,6 @@ TEST_CASE("storage can find items on second page if first is not fully written a
     PartitionEmulationFixture f(0, 3);
     nvs::Storage storage(f.part());
     TEST_ESP_OK(storage.init(0, 3));
-    int bar = 0;
     uint8_t bigdata[(nvs::Page::CHUNK_MAX_SIZE - nvs::Page::ENTRY_SIZE) / 2] = {0};
     // write one big chunk of data
     ESP_ERROR_CHECK(storage.writeItem(0, nvs::ItemType::BLOB, "1", bigdata, sizeof(bigdata)));
@@ -635,8 +646,6 @@ TEST_CASE("deinit partition doesn't affect other partition's open handles", "[nv
     const char *OTHER_PARTITION_NAME = "other_part";
     PartitionEmulationFixture f(0, 10);
     PartitionEmulationFixture f_other(0, 10, OTHER_PARTITION_NAME);
-    const char *str = "value 0123456789abcdef0123456789abcdef";
-    const uint8_t blob[8] = {0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7};
 
     nvs_handle_t handle_1;
     const uint32_t NVS_FLASH_SECTOR = 6;
@@ -696,7 +705,6 @@ TEST_CASE("nvs_entry_info fails with ESP_ERR_INVALID_ARG if a parameter is NULL"
 TEST_CASE("nvs_entry_info doesn't change iterator on parameter error", "[nvs]")
 {
     nvs_iterator_t it = reinterpret_cast<nvs_iterator_t>(0xbeef);
-    nvs_entry_info_t info;
     REQUIRE(nvs_entry_info(it, nullptr) == ESP_ERR_INVALID_ARG);
     CHECK(it == reinterpret_cast<nvs_iterator_t>(0xbeef));
 
@@ -757,7 +765,7 @@ TEST_CASE("nvs iterators tests", "[nvs]")
         CHECK(res == ESP_ERR_NVS_NOT_FOUND); // after finishing the loop or if no entry was found to begin with,
         // res has to be ESP_ERR_NVS_NOT_FOUND or some internal error
         // or programming error occurred
-        nvs_release_iterator(it); // unneccessary call but emphasizes the programming pattern
+        nvs_release_iterator(it); // unnecessary call but emphasizes the programming pattern
         return count;
     };
 
@@ -772,7 +780,7 @@ TEST_CASE("nvs iterators tests", "[nvs]")
         CHECK(res == ESP_ERR_NVS_NOT_FOUND); // after finishing the loop or if no entry was found to begin with,
         // res has to be ESP_ERR_NVS_NOT_FOUND or some internal error
         // or programming error occurred
-        nvs_release_iterator(it); // unneccessary call but emphasizes the programming pattern
+        nvs_release_iterator(it); // unnecessary call but emphasizes the programming pattern
         return count;
     };
 
@@ -859,7 +867,7 @@ TEST_CASE("nvs iterators tests", "[nvs]")
         CHECK(res == ESP_ERR_NVS_NOT_FOUND); // after finishing the loop, res has to be ESP_ERR_NVS_NOT_FOUND
         // or some internal error or programming error occurred
         CHECK(key == "value8");
-        nvs_release_iterator(it); // unneccessary call but emphasizes the programming pattern
+        nvs_release_iterator(it); // unnecessary call but emphasizes the programming pattern
     }
 
     SECTION("Entry info is not affected by subsequent erase") {
@@ -906,7 +914,7 @@ TEST_CASE("nvs iterators tests", "[nvs]")
         // or some internal error or programming error occurred
         CHECK(entries_created == entries_found);
 
-        nvs_release_iterator(it); // unneccessary call but emphasizes the programming pattern
+        nvs_release_iterator(it); // unnecessary call but emphasizes the programming pattern
         nvs_close(handle_3);
     }
 
@@ -1001,8 +1009,8 @@ TEST_CASE("wifi test", "[nvs]")
     TEST_ESP_OK(nvs_set_u8(net80211_handle, "wifi.opmode", opmode));
 
     uint8_t country = 0;
-    TEST_ESP_ERR(nvs_get_u8(net80211_handle, "wifi.country", &opmode), ESP_ERR_NVS_NOT_FOUND);
-    TEST_ESP_OK(nvs_set_u8(net80211_handle, "wifi.country", opmode));
+    TEST_ESP_ERR(nvs_get_u8(net80211_handle, "wifi.country", &country), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_OK(nvs_set_u8(net80211_handle, "wifi.country", country));
 
     char ssid[36];
     size_t size = sizeof(ssid);
@@ -1330,7 +1338,6 @@ public:
 
             case nvs::ItemType::SZ: {
                 char buf[strBufLen];
-                size_t len = strBufLen;
 
                 size_t strLen = gen() % (strBufLen - 1);
                 std::generate_n(buf, strLen, [&]() -> char {
@@ -1608,7 +1615,7 @@ TEST_CASE("calculate used and free space", "[nvs]")
     nvs_handle_t handle_1;
     size_t ns1_expected_entries = 0;
 
-    // create namepace
+    // create namespace
     consumed_entries = 1;   // should consume one entry
     TEST_ESP_OK(nvs_open("test_k1", NVS_READWRITE, &handle_1));
     TEST_ESP_OK(nvs_get_stats(NULL, &stat2));
@@ -1896,8 +1903,6 @@ TEST_CASE("Check that orphaned blobs are erased during init", "[nvs]")
 {
     const size_t blob_size = nvs::Page::CHUNK_MAX_SIZE * 3 ;
     uint8_t blob[blob_size] = {0x11};
-    uint8_t blob2[blob_size] = {0x22};
-    uint8_t blob3[blob_size] = {0x33};
     PartitionEmulationFixture f(0, 5);
     nvs::Storage storage(f.part());
 
@@ -2807,7 +2812,6 @@ static void check_nvs_part_gen_args(char const *flash_binary_filename,      // n
     char buf[64] = {0};
     uint8_t hexdata[] = {0x01, 0x02, 0x03, 0xab, 0xcd, 0xef};
     size_t buflen = 64;
-    int j;
     TEST_ESP_OK( nvs_get_blob(handle, "dummyHex2BinKey", buf, &buflen));
     CHECK(memcmp(buf, hexdata, buflen) == 0);
 
@@ -2876,7 +2880,6 @@ static void check_nvs_part_gen_args_mfg(char const *flash_binary_filename,  // n
 
     uint8_t hexdata[] = {0x01, 0x02, 0x03, 0xab, 0xcd, 0xef};
     buflen = 64;
-    int j;
     TEST_ESP_OK( nvs_get_blob(handle, "dummyHex2BinKey", buf, &buflen));
     CHECK(memcmp(buf, hexdata, buflen) == 0);
 
@@ -3255,6 +3258,156 @@ TEST_CASE("check and read data from partition generated via manufacturing utilit
     }
 }
 
+TEST_CASE("nvs multiple write with same key but different types", "[nvs][xxx]")
+{
+    PartitionEmulationFixture f(0, 10);
+
+    nvs_handle_t handle_1;
+    const uint32_t NVS_FLASH_SECTOR = 6;
+    const uint32_t NVS_FLASH_SECTOR_COUNT_MIN = 3;
+    TEMPORARILY_DISABLED(f.emu.setBounds(NVS_FLASH_SECTOR, NVS_FLASH_SECTOR + NVS_FLASH_SECTOR_COUNT_MIN);)
+
+    for (uint16_t j = NVS_FLASH_SECTOR; j < NVS_FLASH_SECTOR + NVS_FLASH_SECTOR_COUNT_MIN; ++j) {
+        f.erase(j);
+    }
+    TEST_ESP_OK(nvs::NVSPartitionManager::get_instance()->init_custom(f.part(),
+                NVS_FLASH_SECTOR,
+                NVS_FLASH_SECTOR_COUNT_MIN));
+
+    TEST_ESP_OK(nvs_open("namespace1", NVS_READWRITE, &handle_1));
+
+    nvs_erase_all(handle_1);
+
+    int32_t v32;
+    int8_t v8;
+
+    TEST_ESP_OK(nvs_set_i32(handle_1, "foo", (int32_t)12345678));
+    TEST_ESP_OK(nvs_set_i8(handle_1, "foo", (int8_t)12));
+    TEST_ESP_OK(nvs_set_i8(handle_1, "foo", (int8_t)34));
+
+#ifdef CONFIG_NVS_LEGACY_DUP_KEYS_COMPATIBILITY
+    // Legacy behavior
+    // First use of key hooks data type until removed by nvs_erase_key. Alternative reuse of same key with different
+    // data type is written to the storage as hidden active value. It is returned by nvs_get function after nvs_erase_key is called.
+    // Mixing more than 2 data types brings undefined behavior. It is not tested here.
+
+    TEST_ESP_ERR(nvs_get_i8(handle_1, "foo", &v8), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_OK(nvs_get_i32(handle_1, "foo", &v32));
+    TEST_ESP_OK(nvs_erase_key(handle_1, "foo"));
+
+    TEST_ESP_OK(nvs_get_i8(handle_1, "foo", &v8));
+    TEST_ESP_ERR(nvs_get_i32(handle_1, "foo", &v32), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_OK(nvs_erase_key(handle_1, "foo"));
+
+    TEST_ESP_OK(nvs_get_i8(handle_1, "foo", &v8));
+    TEST_ESP_ERR(nvs_get_i32(handle_1, "foo", &v32), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_OK(nvs_erase_key(handle_1, "foo"));
+
+    TEST_ESP_ERR(nvs_erase_key(handle_1, "foo"), ESP_ERR_NVS_NOT_FOUND);
+#else
+    // New behavior
+    // Latest nvs_set call replaces any existing value. Only one active value under the key exists in storage
+
+    TEST_ESP_OK(nvs_get_i8(handle_1, "foo", &v8));
+    TEST_ESP_ERR(nvs_get_i32(handle_1, "foo", &v32), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_OK(nvs_erase_key(handle_1, "foo"));
+
+    TEST_ESP_ERR(nvs_get_i8(handle_1, "foo", &v8), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_ERR(nvs_get_i32(handle_1, "foo", &v32), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_ERR(nvs_erase_key(handle_1, "foo"), ESP_ERR_NVS_NOT_FOUND);
+#endif
+
+    nvs_close(handle_1);
+
+    TEST_ESP_OK(nvs_flash_deinit_partition(NVS_DEFAULT_PART_NAME));
+}
+
+TEST_CASE("nvs find key tests", "[nvs]")
+{
+    const size_t buff_len = 4096;
+
+    PartitionEmulationFixture f(0, 20);
+    f.randomize(100);
+
+    nvs_handle_t handle_1;
+    nvs_handle_t handle_2;
+
+    const uint32_t NVS_FLASH_SECTOR = 6;
+    const uint32_t NVS_FLASH_SECTOR_COUNT_MIN = 13;
+
+
+    TEST_ESP_ERR(nvs_open("namespace1", NVS_READWRITE, &handle_1), ESP_ERR_NVS_NOT_INITIALIZED);
+    for (uint16_t i = NVS_FLASH_SECTOR; i < NVS_FLASH_SECTOR + NVS_FLASH_SECTOR_COUNT_MIN; ++i) {
+        f.erase(i);
+    }
+    TEST_ESP_OK(nvs::NVSPartitionManager::get_instance()->init_custom(f.part(),
+                NVS_FLASH_SECTOR,
+                NVS_FLASH_SECTOR_COUNT_MIN));
+
+    nvs_type_t datatype_found;  // datatype of entry found
+
+    // open writeable namespace
+    TEST_ESP_OK(nvs_open("namespace1", NVS_READWRITE, &handle_1));
+
+    // set value, erease value, test find before and after each of steps
+    TEST_ESP_ERR(nvs_find_key(handle_1, "foo", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+    // write "foo" as I32, should find it, first attempt without pointer to type variable
+    TEST_ESP_OK(nvs_set_i32(handle_1, "foo", 0x12345678));
+    TEST_ESP_OK(nvs_find_key(handle_1, "foo", nullptr));
+    // second search attempt with pointer to type variable specified
+    TEST_ESP_OK(nvs_find_key(handle_1, "foo", &datatype_found));
+    CHECK(datatype_found == NVS_TYPE_I32);
+    TEST_ESP_OK(nvs_erase_key(handle_1, "foo"));
+    TEST_ESP_ERR(nvs_find_key(handle_1, "foo", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+
+    // set value, rewrite value, erease value, test find before and after each of steps
+    TEST_ESP_ERR(nvs_find_key(handle_1, "foo1", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_OK(nvs_set_i16(handle_1, "foo1", 0x1234));
+    TEST_ESP_OK(nvs_find_key(handle_1, "foo1", &datatype_found));
+    CHECK(datatype_found == NVS_TYPE_I16);
+    TEST_ESP_OK(nvs_set_i16(handle_1, "foo1", 0x4321));
+    TEST_ESP_OK(nvs_find_key(handle_1, "foo1", &datatype_found));
+    CHECK(datatype_found == NVS_TYPE_I16);
+    TEST_ESP_OK(nvs_erase_key(handle_1, "foo1"));
+    TEST_ESP_ERR(nvs_find_key(handle_1, "foo1", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+
+    // set blob value, rewrite blob, delete blob, test find before and after each of steps
+    uint8_t *p_buff = (uint8_t *) malloc(buff_len);
+    CHECK(p_buff != nullptr);
+    TEST_ESP_ERR(nvs_find_key(handle_1, "foo2", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+    for(size_t i=0; i<buff_len; i++) p_buff[i] = (uint8_t) (i%0xff);
+    TEST_ESP_OK(nvs_set_blob(handle_1, "foo2", p_buff, buff_len));
+    TEST_ESP_OK(nvs_find_key(handle_1, "foo2", &datatype_found));
+    CHECK(datatype_found == NVS_TYPE_BLOB);
+    for(size_t i=0; i<buff_len; i++) p_buff[i] = (uint8_t) ((buff_len-i-1)%0xff);
+    TEST_ESP_OK(nvs_set_blob(handle_1, "foo2", p_buff, buff_len));
+    TEST_ESP_OK(nvs_find_key(handle_1, "foo2", &datatype_found));
+    CHECK(datatype_found == NVS_TYPE_BLOB);
+    TEST_ESP_OK(nvs_erase_key(handle_1, "foo2"));
+    TEST_ESP_ERR(nvs_find_key(handle_1, "foo2", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+
+    // test namespace is respected in nvs_find_key
+    // open second writeable namespace
+    TEST_ESP_OK(nvs_open("namespace2", NVS_READWRITE, &handle_2));
+    TEST_ESP_ERR(nvs_find_key(handle_1, "foon1", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_ERR(nvs_find_key(handle_2, "foon1", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_OK(nvs_set_i16(handle_1, "foon1", 0x1234));
+    TEST_ESP_OK(nvs_find_key(handle_1, "foon1", &datatype_found));
+    TEST_ESP_ERR(nvs_find_key(handle_2, "foon1", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_OK(nvs_set_i16(handle_2, "foon1", 0x1234));
+    TEST_ESP_OK(nvs_find_key(handle_1, "foon1", &datatype_found));
+    TEST_ESP_OK(nvs_find_key(handle_2, "foon1", &datatype_found));
+    TEST_ESP_OK(nvs_erase_key(handle_1, "foon1"));
+    TEST_ESP_ERR(nvs_find_key(handle_1, "foon1", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_OK(nvs_find_key(handle_2, "foon1", &datatype_found));
+    TEST_ESP_OK(nvs_erase_key(handle_2, "foon1"));
+    TEST_ESP_ERR(nvs_find_key(handle_1, "foon1", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_ERR(nvs_find_key(handle_2, "foon1", &datatype_found), ESP_ERR_NVS_NOT_FOUND);
+
+    nvs_close(handle_1);
+    nvs_close(handle_2);
+    TEST_ESP_OK(nvs_flash_deinit_partition(NVS_DEFAULT_PART_NAME));
+}
 /* Add new tests above */
 /* This test has to be the final one */
 
@@ -3264,3 +3417,7 @@ TEST_CASE("dump all performance data", "[nvs]")
     std::cout << s_perf.str() << std::endl;
     std::cout << "====================" << std::endl;
 }
+
+#if defined(SEGGER_H) && defined(GLOBAL_H)
+NVS_GUARD_SYSVIEW_MACRO_EXPANSION_POP();
+#endif

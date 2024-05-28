@@ -83,7 +83,7 @@ static inline void brownout_ll_bod_enable(bool bod_enable)
  */
 static inline void brownout_ll_set_intr_wait_cycles(uint8_t cycle)
 {
-    // Not supported on ESP32C3
+    RTCCNTL.brown_out.int_wait = cycle;
 }
 
 /**
@@ -113,6 +113,15 @@ __attribute__((always_inline))
 static inline void brownout_ll_intr_clear(void)
 {
     RTCCNTL.int_clr.rtc_brown_out = 1;
+}
+
+/**
+ * @brief Clear BOD internal count.
+ */
+static inline void brownout_ll_clear_count(void)
+{
+    RTCCNTL.brown_out.cnt_clr = 1;
+    RTCCNTL.brown_out.cnt_clr = 0;
 }
 
 #ifdef __cplusplus

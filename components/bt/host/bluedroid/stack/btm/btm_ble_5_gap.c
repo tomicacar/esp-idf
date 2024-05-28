@@ -11,6 +11,7 @@
 #include <string.h>
 #include "l2c_int.h"
 #if (BLE_50_FEATURE_SUPPORT == TRUE)
+#define SET_BIT(t, n)  (t |= 1UL << (n))
 tBTM_BLE_EXTENDED_CB extend_adv_cb;
 
 tBTM_BLE_5_HCI_CBACK ble_5_hci_cb;
@@ -26,6 +27,7 @@ static tBTM_STATUS btm_ble_ext_adv_set_data_validate(UINT8 instance, UINT16 len,
 typedef struct {
     uint16_t ter_con_handle;
     bool invalid;
+    bool enabled;
     UINT8 instance;
     int duration;
     int max_events;
@@ -35,7 +37,8 @@ typedef struct {
 tBTM_EXT_ADV_RECORD adv_record[MAX_BLE_ADV_INSTANCE] = {0};
 extern void btm_ble_inter_set(bool extble_inter);
 
-static char *btm_ble_hci_status_to_str(tHCI_STATUS status)
+#if !UC_BT_STACK_NO_LOG
+static const char *btm_ble_hci_status_to_str(tHCI_STATUS status)
 {
     switch(status) {
     case HCI_SUCCESS:
@@ -184,6 +187,7 @@ static char *btm_ble_hci_status_to_str(tHCI_STATUS status)
 
     return NULL;
 }
+#endif /* !UC_BT_STACK_NO_LOG */
 
 void btm_ble_extendadvcb_init(void)
 {
@@ -328,7 +332,7 @@ tBTM_STATUS BTM_BleSetExtendedAdvRandaddr(UINT8 instance, BD_ADDR rand_addr)
                         __func__, btm_ble_hci_status_to_str(err), err);
         status = BTM_ILLEGAL_VALUE;
     } else {
-        // set random address success, update address infor
+        // set random address success, update address info
         if(extend_adv_cb.inst[instance].configured && extend_adv_cb.inst[instance].connetable) {
             BTM_BleSetStaticAddr(rand_addr);
             BTM_UpdateAddrInfor(BLE_ADDR_RANDOM, rand_addr);
@@ -412,7 +416,7 @@ end:
             BTM_TRACE_ERROR("LE EA SetParams: cmd err=0x%x", err);
             status = BTM_ILLEGAL_VALUE;
         } else {
-            // set addr success, update address infor
+            // set addr success, update address info
             BTM_UpdateAddrInfor(BLE_ADDR_RANDOM, rand_addr);
         }
     }
@@ -537,6 +541,7 @@ end:
             for (uint8_t i = 0; i < MAX_BLE_ADV_INSTANCE; i++)
             {
                 adv_record[i].invalid = false;
+                adv_record[i].enabled = false;
                 adv_record[i].instance = INVALID_VALUE;
                 adv_record[i].duration = INVALID_VALUE;
                 adv_record[i].max_events = INVALID_VALUE;
@@ -547,6 +552,7 @@ end:
             {
                 uint8_t index = ext_adv[i].instance;
                 adv_record[index].invalid = false;
+                adv_record[index].enabled = false;
                 adv_record[index].instance = INVALID_VALUE;
                 adv_record[index].duration = INVALID_VALUE;
                 adv_record[index].max_events = INVALID_VALUE;
@@ -560,6 +566,7 @@ end:
         {
             uint8_t index = ext_adv[i].instance;
             adv_record[index].invalid = true;
+            adv_record[index].enabled = true;
             adv_record[index].instance = ext_adv[i].instance;
             adv_record[index].duration = ext_adv[i].duration;
             adv_record[index].max_events = ext_adv[i].max_events;
@@ -585,12 +592,12 @@ tBTM_STATUS BTM_BleStartExtAdvRestart(uint8_t con_handle)
        }
     }
 
-    if((index >= MAX_BLE_ADV_INSTANCE) || (!adv_record[index].invalid) || (adv_record[index].retry_count > GATTC_CONNECT_RETRY_COUNT)) {
+    if((index >= MAX_BLE_ADV_INSTANCE) || (!adv_record[index].invalid)) {
         return BTM_WRONG_MODE;
     }
 
     adv_record[index].retry_count ++;
-    BTM_TRACE_DEBUG("remote device did not reveive aux connect response, retatrt the extend adv to reconnect, adv handle %d con_handle %d\n", index, con_handle);
+    BTM_TRACE_DEBUG("remote device did not receive aux connect response, retatrt the extend adv to reconnect, adv handle %d con_handle %d\n", index, con_handle);
     ext_adv.instance = adv_record[index].instance;
     ext_adv.duration = adv_record[index].duration;
     ext_adv.max_events = adv_record[index].max_events;
@@ -717,14 +724,14 @@ tBTM_STATUS BTM_BlePeriodicAdvCfgDataRaw(UINT8 instance, UINT16 len, UINT8 *data
     do {
         UINT8 send_data_len = (rem_len > BTM_BLE_PERIODIC_ADV_DATA_LEN_MAX) ? BTM_BLE_PERIODIC_ADV_DATA_LEN_MAX : rem_len;
 
-        if (len <= BTM_BLE_EXT_ADV_DATA_LEN_MAX) {
+        if (len <= BTM_BLE_PERIODIC_ADV_DATA_LEN_MAX) {
             if (!only_update_did) {
                 operation = BTM_BLE_ADV_DATA_OP_COMPLETE;
             }
         } else {
             if (rem_len == len) {
                 operation = BTM_BLE_ADV_DATA_OP_FIRST_FRAG;
-            } else if (rem_len <= BTM_BLE_EXT_ADV_DATA_LEN_MAX) {
+            } else if (rem_len <= BTM_BLE_PERIODIC_ADV_DATA_LEN_MAX) {
                 operation = BTM_BLE_ADV_DATA_OP_LAST_FRAG;
             } else {
 	        operation = BTM_BLE_ADV_DATA_OP_INTERMEDIATE_FRAG;
@@ -786,14 +793,37 @@ tBTM_STATUS BTM_BlePeriodicAdvCreateSync(tBTM_BLE_Periodic_Sync_Params *params)
     }
 
     if ((params->sync_timeout < 0x0a || params->sync_timeout > 0x4000)
-        || (params->filter_policy > 0x01) || (params->addr_type > 0x01) ||
-        (params->sid > 0xf) || (params->skip > 0x01F3)) {
+        || (params->filter_policy > 0x01)
+        #if (CONFIG_BT_BLE_FEAT_CREATE_SYNC_ENH)
+        || (params->reports_disabled > 0x01)
+        || (params->filter_duplicates > 0x01)
+        #endif
+        /*If the Periodic Advertiser List is not used,
+        the Advertising_SID, Advertiser Address_Type, and Advertiser Address
+        parameters specify the periodic advertising device to listen to; otherwise they
+        shall be ignored.*/
+        || (params->filter_policy == 0 && params->addr_type > 0x01)
+        || (params->filter_policy == 0 && params->sid > 0xf)
+        || (params->skip > 0x01F3)) {
             status = BTM_ILLEGAL_VALUE;
             BTM_TRACE_ERROR("%s, The sync parameters is invalid.", __func__);
             goto end;
     }
+    uint8_t option = 0x00;
+    if (params->filter_policy) {
+        SET_BIT(option, 0);
+    }
 
-    if (!btsnd_hcic_ble_periodic_adv_create_sync(params->filter_policy, params->sid, params->addr_type,
+    #if (CONFIG_BT_BLE_FEAT_CREATE_SYNC_ENH)
+    if (params->reports_disabled) {
+        SET_BIT(option, 1);
+    }
+    if (params->filter_duplicates) {
+        SET_BIT(option, 2);
+    }
+    #endif
+
+    if (!btsnd_hcic_ble_periodic_adv_create_sync(option, params->sid, params->addr_type,
                                             params->addr, params->sync_timeout, 0)) {
         BTM_TRACE_ERROR("LE PA CreateSync cmd failed");
         status = BTM_ILLEGAL_VALUE;
@@ -1175,6 +1205,7 @@ void btm_ble_adv_set_terminated_evt(tBTM_BLE_ADV_TERMINAT *params)
         adv_record[params->adv_handle].ter_con_handle = INVALID_VALUE;
         adv_record[params->adv_handle].invalid = false;
     }
+    adv_record[params->adv_handle].enabled = false;
 
     memcpy(&cb_params.adv_term, params, sizeof(tBTM_BLE_ADV_TERMINAT));
 
@@ -1288,6 +1319,19 @@ void btm_ble_periodic_adv_sync_establish_evt(tBTM_BLE_PERIOD_ADV_SYNC_ESTAB *par
 
     return;
 
+}
+
+uint8_t btm_ble_ext_adv_active_count(void)
+{
+    uint8_t count = 0;
+
+    for (uint8_t i = 0; i < MAX_BLE_ADV_INSTANCE; i++) {
+        if (adv_record[i].enabled == true) {
+            count++;
+        }
+    }
+
+    return count;
 }
 
 #endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)

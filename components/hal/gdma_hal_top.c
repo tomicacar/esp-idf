@@ -60,9 +60,9 @@ void gdma_hal_set_ext_mem_align(gdma_hal_context_t *hal, int chan_id, gdma_chann
     }
 }
 
-void gdma_hal_set_strategy(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_owner_check, bool en_desc_write_back)
+void gdma_hal_set_strategy(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_owner_check, bool en_desc_write_back, bool eof_till_popped)
 {
-    hal->set_strategy(hal, chan_id, dir, en_owner_check, en_desc_write_back);
+    hal->set_strategy(hal, chan_id, dir, en_owner_check, en_desc_write_back, eof_till_popped);
 }
 
 void gdma_hal_enable_intr(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, uint32_t intr_event_mask, bool en_or_dis)
@@ -75,9 +75,9 @@ void gdma_hal_clear_intr(gdma_hal_context_t *hal, int chan_id, gdma_channel_dire
     hal->clear_intr(hal, chan_id, dir, intr_event_mask);
 }
 
-uint32_t gdma_hal_read_intr_status(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir)
+uint32_t gdma_hal_read_intr_status(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool raw)
 {
-    return hal->read_intr_status(hal, chan_id, dir);
+    return hal->read_intr_status(hal, chan_id, dir, raw);
 }
 
 uint32_t gdma_hal_get_intr_status_reg(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir)
@@ -106,3 +106,10 @@ uint32_t gdma_hal_get_crc_result(gdma_hal_context_t *hal, int chan_id, gdma_chan
     return hal->get_crc_result(hal, chan_id, dir);
 }
 #endif // SOC_GDMA_SUPPORT_CRC
+
+#if SOC_GDMA_SUPPORT_ETM
+void gdma_hal_enable_etm_task(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_or_dis)
+{
+    hal->enable_etm_task(hal, chan_id, dir, en_or_dis);
+}
+#endif // SOC_GDMA_SUPPORT_ETM

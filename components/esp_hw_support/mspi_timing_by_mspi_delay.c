@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -22,7 +22,7 @@
 #include "hal/mspi_timing_tuning_ll.h"
 #include "hal/clk_tree_ll.h"
 #include "hal/regi2c_ctrl_ll.h"
-#include "mspi_timing_config.h"
+#include "esp_private/mspi_timing_config.h"
 #include "mspi_timing_by_mspi_delay.h"
 #include "bootloader_flash.h"
 #include "esp32s3/rom/spi_flash.h"
@@ -106,8 +106,8 @@ static uint32_t spi_timing_config_get_dummy(void)
         abort();
     }
 
-#if CONFIG_SPI_FLASH_HPM_ENABLE
-    if (spi_flash_hpm_dummy_adjust()) { // HPM is enabled
+#if CONFIG_SPI_FLASH_HPM_DC_ON
+    if (spi_flash_hpm_dummy_adjust()) { // HPM-DC is enabled
         const spi_flash_hpm_dummy_conf_t *hpm_dummy = spi_flash_hpm_get_dummy();
         switch (mode) {
             case MSPI_TIMING_LL_FLASH_QIO_MODE:
@@ -127,7 +127,7 @@ static uint32_t spi_timing_config_get_dummy(void)
         }
     } else
 #endif
-    { // HPM is not enabled
+    { // HPM-DC is not enabled
         switch (mode) {
             case MSPI_TIMING_LL_FLASH_QIO_MODE:
                 return SPI1_R_QIO_DUMMY_CYCLELEN;
@@ -169,9 +169,9 @@ static void s_set_flash_extra_dummy(uint8_t spi_num, uint8_t extra_dummy)
     mspi_timing_ll_set_quad_flash_dummy(spi_num, dummy + g_rom_spiflash_dummy_len_plus[spi_num]);
 }
 
-void mspi_timing_config_flash_set_tuning_regs(const void *timing_params)
+void mspi_timing_config_flash_set_tuning_regs(const void *configs, uint8_t id)
 {
-    const mspi_timing_tuning_param_t *params = (const mspi_timing_tuning_param_t *)timing_params;
+    const mspi_timing_tuning_param_t *params = &((mspi_timing_config_t *)configs)->tuning_config_table[id];
     /**
      * 1. SPI_MEM_DINx_MODE(1), SPI_MEM_DINx_NUM(1) are meaningless
      *    SPI0 and SPI1 share the SPI_MEM_DINx_MODE(0), SPI_MEM_DINx_NUM(0) for FLASH timing tuning
@@ -239,9 +239,9 @@ static void s_set_psram_extra_dummy(uint8_t spi_num, uint8_t extra_dummy)
 #endif
 }
 
-void mspi_timing_config_psram_set_tuning_regs(const void *timing_params)
+void mspi_timing_config_psram_set_tuning_regs(const void *configs, uint8_t id)
 {
-    const mspi_timing_tuning_param_t *params = (const mspi_timing_tuning_param_t *)timing_params;
+    const mspi_timing_tuning_param_t *params = &((mspi_timing_config_t *)configs)->tuning_config_table[id];
     /**
      * 1. SPI_MEM_SPI_SMEM_DINx_MODE(1), SPI_MEM_SPI_SMEM_DINx_NUM(1) are meaningless
      *    SPI0 and SPI1 share the SPI_MEM_SPI_SMEM_DINx_MODE(0), SPI_MEM_SPI_SMEM_DINx_NUM(0) for PSRAM timing tuning
@@ -322,6 +322,14 @@ static void s_psram_execution(uint8_t *buf, uint32_t addr, uint32_t len, bool is
     }
 }
 
+void mspi_timing_config_psram_prepare_reference_data(uint8_t *buf, uint32_t len)
+{
+    assert((len == MSPI_TIMING_TEST_DATA_LEN) && (len % 4 == 0));
+    for (int i=0; i < len/4; i++) {
+        ((uint32_t *)buf)[i] = 0xa5ff005a;
+    }
+}
+
 void mspi_timing_config_psram_write_data(uint8_t *buf, uint32_t addr, uint32_t len)
 {
     s_psram_execution(buf, addr, len, false);
@@ -345,15 +353,22 @@ static bool get_working_pll_freq(const uint8_t *reference_data, bool is_flash, u
     uint32_t big_num = MSPI_TIMING_PLL_FREQ_SCAN_RANGE_MHZ_MAX * 2;  //This number should be larger than MSPI_TIMING_PLL_FREQ_SCAN_RANGE_MHZ_MAX, for error handling
     uint32_t max_freq = 0;
     uint32_t min_freq = big_num;
-    rtc_xtal_freq_t xtal_freq = rtc_clk_xtal_freq_get();
+    soc_xtal_freq_t xtal_freq = rtc_clk_xtal_freq_get();
 
-    //BBPLL CALIBRATION START
-    regi2c_ctrl_ll_bbpll_calibration_start();
     for (int pll_mhz_tuning = MSPI_TIMING_PLL_FREQ_SCAN_RANGE_MHZ_MIN; pll_mhz_tuning <= MSPI_TIMING_PLL_FREQ_SCAN_RANGE_MHZ_MAX; pll_mhz_tuning += 8) {
+        //bbpll calibration start
+        regi2c_ctrl_ll_bbpll_calibration_start();
+
         /**
          * pll_mhz = xtal_mhz * (oc_div + 4) / (oc_ref_div + 1)
          */
         clk_ll_bbpll_set_frequency_for_mspi_tuning(xtal_freq, pll_mhz_tuning, ((pll_mhz_tuning / 4) - 4), 9);
+
+        //wait calibration done
+        while(!regi2c_ctrl_ll_bbpll_calibration_is_done());
+
+        //bbpll calibration stop
+        regi2c_ctrl_ll_bbpll_calibration_stop();
 
         memset(read_data, 0, MSPI_TIMING_TEST_DATA_LEN);
         if (is_flash) {
@@ -380,14 +395,14 @@ static bool get_working_pll_freq(const uint8_t *reference_data, bool is_flash, u
 
     //restore PLL config
     clk_ll_bbpll_set_freq_mhz(previous_config.source_freq_mhz);
+    //bbpll calibration start
+    regi2c_ctrl_ll_bbpll_calibration_start();
+    //set pll
     clk_ll_bbpll_set_config(previous_config.source_freq_mhz, xtal_freq);
-
-    //WAIT CALIBRATION DONE
+    //wait calibration done
     while(!regi2c_ctrl_ll_bbpll_calibration_is_done());
-
-    //BBPLL CALIBRATION STOP
+    //bbpll calibration stop
     regi2c_ctrl_ll_bbpll_calibration_stop();
-
 
     *out_max_freq = max_freq;
     *out_min_freq = min_freq;
@@ -406,15 +421,15 @@ static uint32_t s_select_best_tuning_config_dtr(const mspi_timing_config_t *conf
     if (consecutive_length <= 2 || consecutive_length >= 6) {
         //tuning is FAIL, select default point, and generate a warning
         best_point = configs->default_config_id;
-        ESP_EARLY_LOGW(TAG, "tuning fail, best point is fallen back to index %d", best_point);
+        ESP_EARLY_LOGW(TAG, "tuning fail, best point is fallen back to index %"PRIu32"", best_point);
     } else if (consecutive_length <= 4) {
         //consecutive length :  3 or 4
         best_point = end - 1;
-        ESP_EARLY_LOGD(TAG, "tuning success, best point is index %d", best_point);
+        ESP_EARLY_LOGD(TAG, "tuning success, best point is index %"PRIu32"", best_point);
     } else {
         //consecutive point list length equals 5
         best_point = end - 2;
-        ESP_EARLY_LOGD(TAG, "tuning success, best point is index %d", best_point);
+        ESP_EARLY_LOGD(TAG, "tuning success, best point is index %"PRIu32"", best_point);
     }
 
     return best_point;
@@ -432,9 +447,9 @@ static uint32_t s_select_best_tuning_config_dtr(const mspi_timing_config_t *conf
 
     for (; current_point <= end; current_point++) {
         if (is_flash) {
-            mspi_timing_config_flash_set_tuning_regs(&(configs->tuning_config_table[current_point]));
+            mspi_timing_config_flash_set_tuning_regs(configs, current_point);
         } else {
-            mspi_timing_config_psram_set_tuning_regs(&(configs->tuning_config_table[current_point]));
+            mspi_timing_config_psram_set_tuning_regs(configs, current_point);
         }
 
         ret = get_working_pll_freq(reference_data, is_flash, &temp_max_freq, &temp_min_freq);
@@ -442,13 +457,13 @@ static uint32_t s_select_best_tuning_config_dtr(const mspi_timing_config_t *conf
             max_freq = temp_max_freq;
             best_point = current_point;
         }
-        ESP_EARLY_LOGD(TAG, "sample point %d, max pll is %d mhz, min pll is %d\n", current_point, temp_max_freq, temp_min_freq);
+        ESP_EARLY_LOGD(TAG, "sample point %" PRIu32 ", max pll is %" PRIu32 " mhz, min pll is %" PRIu32, current_point, temp_max_freq, temp_min_freq);
     }
     if (max_freq == 0) {
-        ESP_EARLY_LOGW(TAG, "freq scan tuning fail, best point is fallen back to index %d", end + 1 - consecutive_length);
+        ESP_EARLY_LOGW(TAG, "freq scan tuning fail, best point is fallen back to index %" PRIu32, end + 1 - consecutive_length);
         best_point = end + 1 - consecutive_length;
     } else {
-        ESP_EARLY_LOGD(TAG, "freq scan success, max pll is %dmhz, best point is index %d", max_freq, best_point);
+        ESP_EARLY_LOGD(TAG, "freq scan success, max pll is %" PRIu32 "mhz, best point is index %" PRIu32, max_freq, best_point);
     }
 
     return best_point;
@@ -462,19 +477,17 @@ static uint32_t s_select_best_tuning_config_dtr(const mspi_timing_config_t *conf
 static uint32_t s_select_best_tuning_config_str(const mspi_timing_config_t *configs, uint32_t consecutive_length, uint32_t end)
 {
 #if (MSPI_TIMING_CORE_CLOCK_MHZ == 120 || MSPI_TIMING_CORE_CLOCK_MHZ == 240)
-    ESP_EARLY_LOGW("FLASH/PSRAM", "DO NOT USE FOR MASS PRODUCTION! Timing parameters may be updated in future IDF version.");
-
     //STR best point scheme
     uint32_t best_point;
 
     if (consecutive_length <= 2|| consecutive_length >= 5) {
         //tuning is FAIL, select default point, and generate a warning
         best_point = configs->default_config_id;
-        ESP_EARLY_LOGW(TAG, "tuning fail, best point is fallen back to index %d", best_point);
+        ESP_EARLY_LOGW(TAG, "tuning fail, best point is fallen back to index %"PRIu32"", best_point);
     } else {
         //consecutive length :  3 or 4
         best_point = end - consecutive_length / 2;
-        ESP_EARLY_LOGD(TAG, "tuning success, best point is index %d", best_point);
+        ESP_EARLY_LOGD(TAG, "tuning success, best point is index %"PRIu32"", best_point);
     }
 
     return best_point;
@@ -500,7 +513,7 @@ uint32_t mspi_timing_flash_select_best_tuning_config(const void *configs, uint32
 {
     const mspi_timing_config_t *timing_configs = (const mspi_timing_config_t *)configs;
     uint32_t best_point = s_select_best_tuning_config(timing_configs, consecutive_length, end, reference_data, is_ddr, true);
-    ESP_EARLY_LOGI(TAG, "Flash timing tuning index: %d", best_point);
+    ESP_EARLY_LOGI(TAG, "Flash timing tuning index: %"PRIu32"", best_point);
 
     return best_point;
 }
@@ -509,7 +522,7 @@ uint32_t mspi_timing_psram_select_best_tuning_config(const void *configs, uint32
 {
     const mspi_timing_config_t *timing_configs = (const mspi_timing_config_t *)configs;
     uint32_t best_point = s_select_best_tuning_config(timing_configs, consecutive_length, end, reference_data, is_ddr, false);
-    ESP_EARLY_LOGI(TAG, "PSRAM timing tuning index: %d", best_point);
+    ESP_EARLY_LOGI(TAG, "PSRAM timing tuning index: %"PRIu32"", best_point);
 
     return best_point;
 }
@@ -517,16 +530,14 @@ uint32_t mspi_timing_psram_select_best_tuning_config(const void *configs, uint32
 static mspi_timing_tuning_param_t s_flash_best_timing_tuning_config;
 static mspi_timing_tuning_param_t s_psram_best_timing_tuning_config;
 
-void mspi_timing_flash_set_best_tuning_config(const void *timing_params)
+void mspi_timing_flash_set_best_tuning_config(const void *configs, uint8_t best_id)
 {
-    const mspi_timing_tuning_param_t *params = (const mspi_timing_tuning_param_t *)timing_params;
-    s_flash_best_timing_tuning_config = *params;
+    s_flash_best_timing_tuning_config = ((const mspi_timing_config_t *)configs)->tuning_config_table[best_id];
 }
 
-void mspi_timing_psram_set_best_tuning_config(const void *timing_params)
+void mspi_timing_psram_set_best_tuning_config(const void *configs, uint8_t best_id)
 {
-    const mspi_timing_tuning_param_t *params = (const mspi_timing_tuning_param_t *)timing_params;
-    s_psram_best_timing_tuning_config = *params;
+    s_psram_best_timing_tuning_config = ((const mspi_timing_config_t *)configs)->tuning_config_table[best_id];
 }
 
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -19,6 +19,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define BROWNOUT_DETECTOR_LL_INTERRUPT_MASK   (BIT(31))
 
 /**
  * @brief power down the flash when a brown out happens.
@@ -113,6 +115,25 @@ __attribute__((always_inline))
 static inline void brownout_ll_intr_clear(void)
 {
     LP_ANA_PERI.int_clr.bod_mode0_int_clr = 1;
+}
+
+/**
+ * @brief Clear BOD internal count.
+ */
+static inline void brownout_ll_clear_count(void)
+{
+    LP_ANA_PERI.bod_mode0_cntl.bod_mode0_cnt_clr = 1;
+    LP_ANA_PERI.bod_mode0_cntl.bod_mode0_cnt_clr = 0;
+}
+
+/**
+ * @brief Get interrupt status register address
+ *
+ * @return Register address
+ */
+static inline volatile void *brownout_ll_intr_get_status_reg(void)
+{
+    return &LP_ANA_PERI.int_st;
 }
 
 #ifdef __cplusplus

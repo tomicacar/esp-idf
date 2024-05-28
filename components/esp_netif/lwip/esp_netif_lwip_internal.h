@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -23,9 +23,10 @@ typedef struct esp_netif_api_msg_s {
     int ret;
     esp_netif_api_fn api_fn;
     union {
-        esp_netif_t *esp_netif;
-        esp_netif_callback_fn user_fn;
-    };
+        esp_netif_t *esp_netif;         /* esp_netif as input param */
+        esp_netif_t **p_esp_netif;      /* esp_netif as output */
+        esp_netif_callback_fn user_fn;  /* user callback */
+    };              /* Commonly used parameters what calling api_fn */
     void    *data;
 } esp_netif_api_msg_t;
 
@@ -97,6 +98,9 @@ struct esp_netif_obj {
     // event translation
     ip_event_t get_ip_event;
     ip_event_t lost_ip_event;
+#ifdef CONFIG_ESP_NETIF_REPORT_DATA_TRAFFIC
+    bool tx_rx_events_enabled;
+#endif
 
     // misc flags, types, keys, priority
     esp_netif_flags_t flags;
@@ -111,4 +115,6 @@ struct esp_netif_obj {
     uint16_t max_fdb_sta_entries;
     uint8_t max_ports;
 #endif // CONFIG_ESP_NETIF_BRIDGE_EN
+    // mldv6 timer
+    bool mldv6_report_timer_started;
 };

@@ -3,7 +3,15 @@ JTAG Debugging
 
 :link_to_translation:`zh_CN:[中文]`
 
-This document provides a guide to installing OpenOCD for {IDF_TARGET_NAME} and debugging using GDB. The document is structured as follows:
+This document provides a guide to installing OpenOCD for {IDF_TARGET_NAME} and debugging using GDB.
+
+.. note::
+
+    You can also debug your {IDF_TARGET_NAME} without needing to setup JTAG or OpenOCD by using ``idf.py monitor``. See: :doc:`../../api-guides/tools/idf-monitor` and :ref:`CONFIG_ESP_SYSTEM_GDBSTUB_RUNTIME`.
+
+.. highlight:: none
+
+The document is structured as follows:
 
 :ref:`jtag-debugging-introduction`
     Introduction to the purpose of this guide.
@@ -117,14 +125,14 @@ If you have already set up ESP-IDF with CMake build system according to the :doc
 
 The output should be as follows (although the version may be more recent than listed here)::
 
-    Open On-Chip Debugger  v0.10.0-esp32-20190708 (2019-07-08-11:04)
+    Open On-Chip Debugger v0.12.0-esp32-20240318 (2024-03-18-18:25)
     Licensed under GNU GPL v2
     For bug reports, read
-        https://openocd.org/doc/doxygen/bugs.html
+            http://openocd.org/doc/doxygen/bugs.html
 
 You may also verify that OpenOCD knows where its configuration scripts are located by printing the value of ``OPENOCD_SCRIPTS`` environment variable, by typing ``echo $OPENOCD_SCRIPTS`` (for Linux and macOS) or ``echo %OPENOCD_SCRIPTS%`` (for Windows). If a valid path is printed, then OpenOCD is set up correctly.
 
-If any of these steps do not work, please go back to the :ref:`setting up the tools <get-started-set-up-tools>` section of the Getting Started Guide.
+If any of these steps do not work, please go back to the :ref:`setting up the tools <get-started-set-up-tools>` section (for Linux and macOS) or :ref:`ESP-IDF Tools Installer <get-started-windows-tools-installer>` (for Windows) section of the Getting Started Guide.
 
 .. note::
 
@@ -214,7 +222,7 @@ OpenOCD flashing command ``program_esp`` has the following format:
  - ``image_file`` - Path to program image file.
  - ``offset`` - Offset in flash bank to write image.
  - ``verify`` - Optional. Verify flash contents after writing.
- - ``reset`` - Optional. Reset target after programing.
+ - ``reset`` - Optional. Reset target after programming.
  - ``exit`` - Optional. Finally exit OpenOCD.
  - ``compress`` - Optional. Compress image file before programming.
  - ``encrypt`` - Optional. Encrypt binary before writing to flash. Same functionality with ``idf.py encrypted-flash``

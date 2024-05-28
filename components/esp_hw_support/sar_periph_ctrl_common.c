@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -13,6 +13,9 @@
 #if SOC_TEMP_SENSOR_SUPPORTED
 #include "hal/temperature_sensor_ll.h"
 #include "soc/temperature_sensor_periph.h"
+#include "soc/periph_defs.h"
+#include "esp_private/periph_ctrl.h"
+#include "esp_private/adc_share_hw_ctrl.h"
 
 extern __attribute__((unused)) portMUX_TYPE rtc_spinlock;
 
@@ -23,6 +26,12 @@ extern __attribute__((unused)) portMUX_TYPE rtc_spinlock;
 static const char *TAG_TSENS = "temperature_sensor";
 
 #define INT_NOT_USED 999999
+
+#if !SOC_RCC_IS_INDEPENDENT
+#define TSENS_RCC_ATOMIC() PERIPH_RCC_ATOMIC()
+#else
+#define TSENS_RCC_ATOMIC()
+#endif
 
 static int s_record_min = INT_NOT_USED;
 static int s_record_max = INT_NOT_USED;
@@ -35,6 +44,14 @@ void temperature_sensor_power_acquire(void)
     portENTER_CRITICAL(&rtc_spinlock);
     s_temperature_sensor_power_cnt++;
     if (s_temperature_sensor_power_cnt == 1) {
+        regi2c_saradc_enable();
+#if !SOC_TSENS_IS_INDEPENDENT_FROM_ADC
+        adc_apb_periph_claim();
+#endif
+        TSENS_RCC_ATOMIC() {
+            temperature_sensor_ll_bus_clk_enable(true);
+            temperature_sensor_ll_reset_module();
+        }
         temperature_sensor_ll_enable(true);
     }
     portEXIT_CRITICAL(&rtc_spinlock);
@@ -51,6 +68,13 @@ void temperature_sensor_power_release(void)
         abort();
     } else if (s_temperature_sensor_power_cnt == 0) {
         temperature_sensor_ll_enable(false);
+        TSENS_RCC_ATOMIC() {
+            temperature_sensor_ll_bus_clk_enable(false);
+        }
+#if !SOC_TSENS_IS_INDEPENDENT_FROM_ADC
+        adc_apb_periph_free();
+#endif
+        regi2c_saradc_disable();
     }
     portEXIT_CRITICAL(&rtc_spinlock);
 }

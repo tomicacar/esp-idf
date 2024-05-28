@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2021-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2021-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,13 +10,16 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <unistd.h>
+#include <errno.h>
+#include <time.h>
 #include "esp_rom_sys.h"
 
 static void call_linux_putc(char c);
 
 static void (*s_esp_rom_putc)(char c) = call_linux_putc;
 
-static void call_linux_putc(char c) {
+static void call_linux_putc(char c)
+{
     putc(c, stdout);
 }
 
@@ -52,7 +55,7 @@ static int _cvt(unsigned long long val, char *buf, long radix, const char *digit
 static int esp_rom_vprintf(void (*putc)(char c), const char *fmt, va_list ap)
 {
 #ifdef BINARY_SUPPORT
-    char buf[sizeof(long long)*8];
+    char buf[sizeof(long long) * 8];
     int i;
 #else
     char buf[32];
@@ -118,7 +121,7 @@ static int esp_rom_vprintf(void (*putc)(char c), const char *fmt, va_list ap)
                     val = va_arg(ap, long long);
                 } else if (islong) {
                     val = (long long)va_arg(ap, long);
-                } else{
+                } else {
                     val = (long long)va_arg(ap, int);
                 }
                 if ((c == 'd') || (c == 'D')) {
@@ -129,7 +132,7 @@ static int esp_rom_vprintf(void (*putc)(char c), const char *fmt, va_list ap)
                 } else {
                     if (islong) {
                         val &= (((long long)1) << (sizeof(long) * 8)) - 1;
-                    } else{
+                    } else {
                         val &= (((long long)1) << (sizeof(int) * 8)) - 1;
                     }
                 }
@@ -143,7 +146,7 @@ static int esp_rom_vprintf(void (*putc)(char c), const char *fmt, va_list ap)
                 (*putc)('0');
                 (*putc)('x');
                 zero_fill = true;
-                left_prec = sizeof(unsigned long)*2;
+                left_prec = sizeof(unsigned long) * 2;
             case 'd':
             case 'D':
             case 'u':
@@ -263,9 +266,16 @@ int esp_rom_printf(const char *fmt, ...)
 
 void esp_rom_delay_us(uint32_t us)
 {
-    int sleep_result = usleep(us);
-    assert(sleep_result == 0);
-    (void)sleep_result; // Prevents compiler from optimizing out usleep() due to unused result. Also prevents warning.
+    struct timespec wait_time = {
+        .tv_sec = us / 1000000,
+        .tv_nsec = us % 1000000 * 1000,
+    };
+    /*
+        If nanosleep() is interrupted by a signal handler, nanosleep()
+        returns -1, sets errno to EINTR, and writes the remaining time.
+        The remaining time is used to call nanosleep() again and complete the specified pause.
+    */
+    while (nanosleep(&wait_time, &wait_time) == -1 && errno == EINTR) { };
 }
 
 void esp_rom_install_channel_putc(int channel, void (*putc)(char c))
@@ -285,4 +295,12 @@ void esp_rom_install_uart_printf(void)
 soc_reset_reason_t esp_rom_get_reset_reason(int cpu_no)
 {
     return RESET_REASON_CHIP_POWER_ON;
+}
+
+void __assert_func(const char *file, int line, const char *func, const char *failedexpr)
+{
+    esp_rom_printf("assertion \"%s\" failed: file \"%s\", line %d%s%s\n",
+                   failedexpr, file, line,
+                   func ? ", function: " : "", func ? func : "");
+    while (1) {}
 }

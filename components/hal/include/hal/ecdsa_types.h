@@ -1,9 +1,11 @@
 /*
- * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
+
+#include "soc/soc_caps.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,6 +17,7 @@ extern "C" {
 typedef enum {
     ECDSA_MODE_SIGN_VERIFY,
     ECDSA_MODE_SIGN_GEN,
+    ECDSA_MODE_EXPORT_PUBKEY,
 } ecdsa_mode_t;
 
 /**
@@ -26,20 +29,22 @@ typedef enum {
 } ecdsa_curve_t;
 
 /**
- * @brief Source of 'K' used internally for generating signature
- */
-typedef enum {
-    ECDSA_K_USE_TRNG,
-    ECDSA_K_USER_PROVIDED,
-} ecdsa_k_mode_t;
-
-/**
  * @brief Source of SHA message that is to be signed/verified
  */
 typedef enum {
     ECDSA_Z_USE_SHA_PERI,
     ECDSA_Z_USER_PROVIDED,
 } ecdsa_sha_mode_t;
+
+/**
+ * @brief ECDSA signature type
+ */
+typedef enum {
+    ECDSA_K_TYPE_TRNG,
+#ifdef SOC_ECDSA_SUPPORT_DETERMINISTIC_MODE
+    ECDSA_K_TYPE_DETERMINISITIC,
+#endif /* SOC_ECDSA_SUPPORT_DETERMINISTIC_MODE */
+} ecdsa_sign_type_t;
 
 #ifdef __cplusplus
 }

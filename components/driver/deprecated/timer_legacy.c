@@ -34,7 +34,7 @@ static const char *TIMER_TAG = "timer_group";
 #define TIMER_ENTER_CRITICAL(mux)      portENTER_CRITICAL_SAFE(mux);
 #define TIMER_EXIT_CRITICAL(mux)       portEXIT_CRITICAL_SAFE(mux);
 
-#if CONFIG_IDF_TARGET_ESP32P4
+#if SOC_PERIPH_CLK_CTRL_SHARED
 #define GPTIMER_CLOCK_SRC_ATOMIC() PERIPH_RCC_ATOMIC()
 #else
 #define GPTIMER_CLOCK_SRC_ATOMIC()
@@ -85,7 +85,7 @@ esp_err_t timer_get_counter_time_sec(timer_group_t group_num, timer_idx_t timer_
     // get clock source frequency
     uint32_t counter_src_hz = 0;
     ESP_RETURN_ON_ERROR(esp_clk_tree_src_get_freq_hz((soc_module_clk_t)p_timer_obj[group_num][timer_num]->clk_src,
-                        ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &counter_src_hz),
+                                                     ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &counter_src_hz),
                         TIMER_TAG, "get clock source frequency failed");
     *time = (double)timer_val * div / counter_src_hz;
     return ESP_OK;
@@ -217,7 +217,7 @@ static void IRAM_ATTR timer_isr_default(void *arg)
         timer_ll_clear_intr_status(hal->dev, TIMER_LL_EVENT_ALARM(timer_id));
         // call user registered callback
         is_awoken = timer_obj->timer_isr_fun.fn(timer_obj->timer_isr_fun.args);
-        // reenable alarm if required
+        // re-enable alarm if required
         uint64_t new_alarm_value = timer_obj->alarm_value;
         bool reenable_alarm = (new_alarm_value != old_alarm_value) || timer_obj->auto_reload_en;
         timer_ll_enable_alarm(hal->dev, timer_id, reenable_alarm);

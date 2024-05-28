@@ -15,6 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <inttypes.h>
 #include "sdmmc_common.h"
 #include "esp_attr.h"
 #include "esp_compiler.h"
@@ -240,7 +241,7 @@ esp_err_t sdmmc_io_read_byte(sdmmc_card_t* card, uint32_t function,
 {
     esp_err_t ret = sdmmc_io_rw_direct(card, function, addr, SD_ARG_CMD52_READ, out_byte);
     if (unlikely(ret != ESP_OK)) {
-        ESP_LOGE(TAG, "%s: sdmmc_io_rw_direct (read 0x%x) returned 0x%x", __func__, addr, ret);
+        ESP_LOGE(TAG, "%s: sdmmc_io_rw_direct (read 0x%" PRIx32 ") returned 0x%x", __func__, addr, ret);
     }
     return ret;
 }
@@ -252,7 +253,7 @@ esp_err_t sdmmc_io_write_byte(sdmmc_card_t* card, uint32_t function,
     esp_err_t ret = sdmmc_io_rw_direct(card, function, addr,
             SD_ARG_CMD52_WRITE | SD_ARG_CMD52_EXCHANGE, &tmp_byte);
     if (unlikely(ret != ESP_OK)) {
-        ESP_LOGE(TAG, "%s: sdmmc_io_rw_direct (write 0x%x) returned 0x%x", __func__, addr, ret);
+        ESP_LOGE(TAG, "%s: sdmmc_io_rw_direct (write 0x%" PRIu32 ") returned 0x%x", __func__, addr, ret);
         return ret;
     }
     if (out_byte != NULL) {
@@ -265,15 +266,29 @@ esp_err_t sdmmc_io_rw_extended(sdmmc_card_t* card, int func,
     uint32_t reg, int arg, void *datap, size_t datalen)
 {
     esp_err_t err;
-    const size_t max_byte_transfer_size = 512;
+    const int buflen = (datalen + 3) & (~3); //round up to 4
     sdmmc_command_t cmd = {
         .flags = SCF_CMD_AC | SCF_RSP_R5,
         .arg = 0,
         .opcode = SD_IO_RW_EXTENDED,
         .data = datap,
         .datalen = datalen,
-        .blklen = max_byte_transfer_size /* TODO: read max block size from CIS */
+        .buflen = buflen,
+        .blklen = SDMMC_IO_BLOCK_SIZE /* TODO: read max block size from CIS */
     };
+
+    esp_dma_mem_info_t dma_mem_info;
+    card->host.get_dma_info(card->host.slot, &dma_mem_info);
+    if (unlikely(datalen > 0 && !esp_dma_is_buffer_alignment_satisfied(datap, buflen, dma_mem_info))) {
+        if (datalen > SDMMC_IO_BLOCK_SIZE || card->host.dma_aligned_buffer == NULL) {
+            // User gives unaligned buffer while `SDMMC_HOST_FLAG_ALLOC_ALIGNED_BUF` not set.
+            return ESP_ERR_INVALID_ARG;
+        }
+        memset(card->host.dma_aligned_buffer, 0xcc, SDMMC_IO_BLOCK_SIZE);
+        memcpy(card->host.dma_aligned_buffer, datap, datalen);
+        cmd.data = card->host.dma_aligned_buffer;
+        cmd.buflen = SDMMC_IO_BLOCK_SIZE;
+    }
 
     uint32_t count; /* number of bytes or blocks, depending on transfer mode */
     if (arg & SD_ARG_CMD53_BLOCK_MODE) {
@@ -282,12 +297,12 @@ esp_err_t sdmmc_io_rw_extended(sdmmc_card_t* card, int func,
         }
         count = cmd.datalen / cmd.blklen;
     } else {
-        if (datalen > max_byte_transfer_size) {
+        if (datalen > SDMMC_IO_BLOCK_SIZE) {
             /* TODO: split into multiple operations? */
             return ESP_ERR_INVALID_SIZE;
         }
-        if (datalen == max_byte_transfer_size) {
-            count = 0;  // See 5.3.1 SDIO simplifed spec
+        if (datalen == SDMMC_IO_BLOCK_SIZE) {
+            count = 0;  // See 5.3.1 SDIO simplified spec
         } else {
             count = datalen;
         }
@@ -304,6 +319,12 @@ esp_err_t sdmmc_io_rw_extended(sdmmc_card_t* card, int func,
     }
 
     err = sdmmc_send_cmd(card, &cmd);
+
+    if (datalen > 0 && cmd.data == card->host.dma_aligned_buffer) {
+        assert(datalen <= SDMMC_IO_BLOCK_SIZE);
+        memcpy(datap, card->host.dma_aligned_buffer, datalen);
+    }
+
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "%s: sdmmc_send_cmd returned 0x%x", __func__, err);
         return err;
@@ -315,6 +336,13 @@ esp_err_t sdmmc_io_rw_extended(sdmmc_card_t* card, int func,
 esp_err_t sdmmc_io_read_bytes(sdmmc_card_t* card, uint32_t function,
         uint32_t addr, void* dst, size_t size)
 {
+    uint32_t arg = SD_ARG_CMD53_READ | SD_ARG_CMD53_INCREMENT;
+    //Extract and unset the bit used to indicate the OP Code (inverted logic)
+    if (addr & SDMMC_IO_FIXED_ADDR) {
+        arg &= ~SD_ARG_CMD53_INCREMENT;
+        addr &= ~SDMMC_IO_FIXED_ADDR;
+    }
+
     /* host quirk: SDIO transfer with length not divisible by 4 bytes
      * has to be split into two transfers: one with aligned length,
      * the other one for the remaining 1-3 bytes.
@@ -326,9 +354,7 @@ esp_err_t sdmmc_io_read_bytes(sdmmc_card_t* card, uint32_t function,
 
         // Note: sdmmc_io_rw_extended has an internal timeout,
         //  typically SDMMC_DEFAULT_CMD_TIMEOUT_MS
-        esp_err_t err = sdmmc_io_rw_extended(card, function, addr,
-                SD_ARG_CMD53_READ | SD_ARG_CMD53_INCREMENT,
-                pc_dst, will_transfer);
+        esp_err_t err = sdmmc_io_rw_extended(card, function, addr, arg, pc_dst, will_transfer);
         if (unlikely(err != ESP_OK)) {
             return err;
         }
@@ -342,18 +368,22 @@ esp_err_t sdmmc_io_read_bytes(sdmmc_card_t* card, uint32_t function,
 esp_err_t sdmmc_io_write_bytes(sdmmc_card_t* card, uint32_t function,
         uint32_t addr, const void* src, size_t size)
 {
+    uint32_t arg = SD_ARG_CMD53_WRITE | SD_ARG_CMD53_INCREMENT;
+    //Extract and unset the bit used to indicate the OP Code (inverted logic)
+    if (addr & SDMMC_IO_FIXED_ADDR) {
+        arg &= ~SD_ARG_CMD53_INCREMENT;
+        addr &= ~SDMMC_IO_FIXED_ADDR;
+    }
+
     /* same host quirk as in sdmmc_io_read_bytes */
     const uint8_t *pc_src = (const uint8_t*) src;
-
     while (size > 0) {
         size_t size_aligned = size & (~3);
         size_t will_transfer = size_aligned > 0 ? size_aligned : size;
 
         // Note: sdmmc_io_rw_extended has an internal timeout,
         //  typically SDMMC_DEFAULT_CMD_TIMEOUT_MS
-        esp_err_t err = sdmmc_io_rw_extended(card, function, addr,
-                SD_ARG_CMD53_WRITE | SD_ARG_CMD53_INCREMENT,
-                (void*) pc_src, will_transfer);
+        esp_err_t err = sdmmc_io_rw_extended(card, function, addr, arg, (void*) pc_src, will_transfer);
         if (unlikely(err != ESP_OK)) {
             return err;
         }
@@ -367,23 +397,37 @@ esp_err_t sdmmc_io_write_bytes(sdmmc_card_t* card, uint32_t function,
 esp_err_t sdmmc_io_read_blocks(sdmmc_card_t* card, uint32_t function,
         uint32_t addr, void* dst, size_t size)
 {
-    if (unlikely(size % 4 != 0)) {
-        return ESP_ERR_INVALID_SIZE;
+    uint32_t arg = SD_ARG_CMD53_READ | SD_ARG_CMD53_INCREMENT | SD_ARG_CMD53_BLOCK_MODE;
+    //Extract and unset the bit used to indicate the OP Code (inverted logic)
+    if (addr & SDMMC_IO_FIXED_ADDR) {
+        arg &= ~SD_ARG_CMD53_INCREMENT;
+        addr &= ~SDMMC_IO_FIXED_ADDR;
     }
-    return sdmmc_io_rw_extended(card, function, addr,
-            SD_ARG_CMD53_READ | SD_ARG_CMD53_INCREMENT | SD_ARG_CMD53_BLOCK_MODE,
-            dst, size);
+
+    esp_dma_mem_info_t dma_mem_info;
+    card->host.get_dma_info(card->host.slot, &dma_mem_info);
+    if (unlikely(!esp_dma_is_buffer_alignment_satisfied(dst, size, dma_mem_info))) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return sdmmc_io_rw_extended(card, function, addr, arg, dst, size);
 }
 
 esp_err_t sdmmc_io_write_blocks(sdmmc_card_t* card, uint32_t function,
         uint32_t addr, const void* src, size_t size)
 {
-    if (unlikely(size % 4 != 0)) {
-        return ESP_ERR_INVALID_SIZE;
+    uint32_t arg = SD_ARG_CMD53_WRITE | SD_ARG_CMD53_INCREMENT | SD_ARG_CMD53_BLOCK_MODE;
+    //Extract and unset the bit used to indicate the OP Code (inverted logic)
+    if (addr & SDMMC_IO_FIXED_ADDR) {
+        arg &= ~SD_ARG_CMD53_INCREMENT;
+        addr &= ~SDMMC_IO_FIXED_ADDR;
     }
-    return sdmmc_io_rw_extended(card, function, addr,
-            SD_ARG_CMD53_WRITE | SD_ARG_CMD53_INCREMENT | SD_ARG_CMD53_BLOCK_MODE,
-            (void*) src, size);
+
+    esp_dma_mem_info_t dma_mem_info;
+    card->host.get_dma_info(card->host.slot, &dma_mem_info);
+    if (unlikely(!esp_dma_is_buffer_alignment_satisfied(src, size, dma_mem_info))) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    return sdmmc_io_rw_extended(card, function, addr, arg, (void*) src, size);
 }
 
 esp_err_t sdmmc_io_enable_int(sdmmc_card_t* card)

@@ -17,7 +17,10 @@
  ******************************************************************************/
 #include <string.h>
 #include "sdkconfig.h"
+#include "common/bt_target.h"
+#if (BT_CONTROLLER_INCLUDED == TRUE)
 #include "esp_bt.h"
+#endif
 
 #include "common/bt_defs.h"
 #include "common/bt_trace.h"
@@ -28,6 +31,7 @@
 #include "hci/hci_internals.h"
 #include "hci/hci_hal.h"
 #include "hci/hci_layer.h"
+#include "hci/hci_trans_int.h"
 #include "osi/allocator.h"
 #include "hci/packet_fragmenter.h"
 #include "osi/list.h"
@@ -140,6 +144,10 @@ void hci_shut_down(void)
 
 bool hci_downstream_data_post(uint32_t timeout)
 {
+    if (hci_host_env.downstream_data_ready == NULL) {
+        HCI_TRACE_WARNING("%s downstream_data_ready event not created", __func__);
+        return false;
+    }
     return osi_thread_post_event(hci_host_env.downstream_data_ready, timeout);
 }
 
@@ -226,7 +234,7 @@ static void hci_downstream_data_handler(void *arg)
      * All packets will be directly copied to single queue in driver layer with
      * H4 type header added (1 byte).
      */
-    while (esp_vhci_host_check_send_available()) {
+    while (hci_host_check_send_available()) {
         /*Now Target only allowed one packet per TX*/
         BT_HDR *pkt = packet_fragmenter->fragment_current_packet();
         if (pkt != NULL) {
@@ -259,7 +267,7 @@ static void transmit_command(
     // in case the upper layer didn't already
     command->event = MSG_STACK_TO_HC_HCI_CMD;
 
-    HCI_TRACE_DEBUG("HCI Enqueue Comamnd opcode=0x%x\n", metadata->opcode);
+    HCI_TRACE_DEBUG("HCI Enqueue Command opcode=0x%x\n", metadata->opcode);
     BTTRC_DUMP_BUFFER(NULL, command->data + command->offset, command->len);
 
     fixed_pkt_queue_enqueue(hci_host_env.command_queue, linked_pkt, FIXED_PKT_QUEUE_MAX_TIMEOUT);

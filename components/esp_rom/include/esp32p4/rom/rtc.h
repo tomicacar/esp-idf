@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -50,6 +50,9 @@ extern "C" {
   *     RTC_CNTL_STORE5_REG     APB bus frequency
   *     RTC_CNTL_STORE6_REG     FAST_RTC_MEMORY_ENTRY
   *     RTC_CNTL_STORE7_REG     FAST_RTC_MEMORY_CRC
+  *     LP_SYS_LP_STORE8_REG    sleep mode and wake stub address
+  *     LP_SYS_LP_STORE9_REG    LP_UART_INIT_CTRL
+  *     LP_SYS_LP_STORE10_REG   LP_ROM_LOG_CTRL
   *************************************************************************************
   */
 
@@ -64,6 +67,21 @@ extern "C" {
 
 #define RTC_DISABLE_ROM_LOG ((1 << 0) | (1 << 16)) //!< Disable logging from the ROM code.
 
+/*
+ * Use LP_SYS_LP_STORE8_REG to store light sleep wake stub addr and sleep mode
+ *
+ * bit[31: 2] Wake restore func addr
+ * bit[0]:
+ *     0 -- light sleep
+ *     1 -- deep  sleep
+ */
+#define RTC_SLEEP_WAKE_STUB_ADDR_REG  LP_SYSTEM_REG_LP_STORE8_REG
+#define RTC_SLEEP_MODE_REG            LP_SYSTEM_REG_LP_STORE8_REG
+
+// lp uart init status, 0 - need init, 1 - no init.
+#define LP_UART_INIT_CTRL_REG   LP_SYSTEM_REG_LP_STORE9_REG
+#define ROM_LOG_CTRL_REG        LP_SYSTEM_REG_LP_STORE10_REG
+
 typedef enum {
     AWAKE = 0,             //<CPU ON
     LIGHT_SLEEP = BIT0,    //CPU waiti, PLL ON.  We don't need explicitly set this mode.
@@ -71,46 +89,47 @@ typedef enum {
 } SLEEP_MODE;
 
 typedef enum {
-    NO_MEAN                =  0,
-    POWERON_RESET          =  1,    /**<1, Vbat power on reset*/
-    RTC_SW_SYS_RESET       =  3,    /**<3, Software reset digital core (hp system)*/
-    DEEPSLEEP_RESET        =  5,    /**<5, Deep Sleep reset digital core (hp system)*/
-    SDIO_RESET             =  6,    /**<6, Reset by SLC module, reset digital core (hp system)*/
-    TG0WDT_SYS_RESET       =  7,    /**<7, Timer Group0 Watch dog reset digital core (hp system)*/
-    TG1WDT_SYS_RESET       =  8,    /**<8, Timer Group1 Watch dog reset digital core (hp system)*/
-    RTCWDT_SYS_RESET       =  9,    /**<9, RTC Watch dog Reset digital core (hp system)*/
-    TG0WDT_CPU_RESET       = 11,    /**<11, Time Group0 reset CPU*/
-    RTC_SW_CPU_RESET       = 12,    /**<12, Software reset CPU*/
-    RTCWDT_CPU_RESET       = 13,    /**<13, RTC Watch dog Reset CPU*/
-    RTCWDT_BROWN_OUT_RESET = 15,    /**<15, Reset when the vdd voltage is not stable*/
-    RTCWDT_RTC_RESET       = 16,    /**<16, RTC Watch dog reset digital core and rtc module*/
-    TG1WDT_CPU_RESET       = 17,    /**<17, Time Group1 reset CPU*/
-    SUPER_WDT_RESET        = 18,    /**<18, super watchdog reset digital core and rtc module*/
-    EFUSE_RESET            = 20,    /**<20, efuse reset digital core (hp system)*/
-    USB_UART_CHIP_RESET    = 21,    /**<21, usb uart reset digital core (hp system)*/
-    USB_JTAG_CHIP_RESET    = 22,    /**<22, usb jtag reset digital core (hp system)*/
-    JTAG_RESET             = 24,    /**<24, jtag reset CPU*/
+    NO_MEAN = 0,
+    POWERON_RESET = 1,          /**<1, Vbat power on reset*/
+    SW_SYS_RESET = 3,           /**<3, Software reset digital core*/
+    PMU_SYS_PWR_DOWN_RESET = 5, /**<5, PMU HP system power down reset*/
+    HP_SYS_HP_WDT_RESET = 7,    /**<7, HP system reset from HP watchdog*/
+    HP_SYS_LP_WDT_RESET = 9,    /**<9, HP system reset from LP watchdog*/
+    HP_CORE_HP_WDT_RESET = 11,  /**<11, HP core reset from HP watchdog*/
+    SW_CPU_RESET = 12,          /**<12, software reset cpu*/
+    HP_CORE_LP_WDT_RESET = 13,  /**<13, HP core reset from LP watchdog*/
+    BROWN_OUT_RESET = 15,       /**<15, Reset when the vdd voltage is not stable*/
+    CHIP_LP_WDT_RESET = 16,     /**<16, LP watchdog chip reset*/
+    SUPER_WDT_RESET = 18,       /**<18, super watchdog reset*/
+    GLITCH_RTC_RESET = 19,      /**<19, glitch reset*/
+    EFUSE_CRC_ERR_RESET = 20,   /**<20, efuse ecc error reset*/
+    CHIP_USB_JTAG_RESET = 22,   /**<22, HP usb jtag chip reset*/
+    CHIP_USB_UART_RESET = 23,   /**<23, HP usb uart chip reset*/
+    JTAG_RESET = 24,            /**<24, jtag reset*/
+    CPU_LOCKUP_RESET = 26,      /**<26, cpu lockup reset*/
 } RESET_REASON;
 
 // Check if the reset reason defined in ROM is compatible with soc/reset_reasons.h
 ESP_STATIC_ASSERT((soc_reset_reason_t)POWERON_RESET == RESET_REASON_CHIP_POWER_ON, "POWERON_RESET != RESET_REASON_CHIP_POWER_ON");
-ESP_STATIC_ASSERT((soc_reset_reason_t)RTC_SW_SYS_RESET == RESET_REASON_CORE_SW, "RTC_SW_SYS_RESET != RESET_REASON_CORE_SW");
-ESP_STATIC_ASSERT((soc_reset_reason_t)DEEPSLEEP_RESET == RESET_REASON_CORE_DEEP_SLEEP, "DEEPSLEEP_RESET != RESET_REASON_CORE_DEEP_SLEEP");
-ESP_STATIC_ASSERT((soc_reset_reason_t)TG0WDT_SYS_RESET == RESET_REASON_CORE_MWDT0, "TG0WDT_SYS_RESET != RESET_REASON_CORE_MWDT0");
-ESP_STATIC_ASSERT((soc_reset_reason_t)TG1WDT_SYS_RESET == RESET_REASON_CORE_MWDT1, "TG1WDT_SYS_RESET != RESET_REASON_CORE_MWDT1");
-ESP_STATIC_ASSERT((soc_reset_reason_t)RTCWDT_SYS_RESET == RESET_REASON_CORE_RTC_WDT, "RTCWDT_SYS_RESET != RESET_REASON_CORE_RTC_WDT");
-ESP_STATIC_ASSERT((soc_reset_reason_t)TG0WDT_CPU_RESET == RESET_REASON_CPU0_MWDT0, "TG0WDT_CPU_RESET != RESET_REASON_CPU0_MWDT0");
-ESP_STATIC_ASSERT((soc_reset_reason_t)RTC_SW_CPU_RESET == RESET_REASON_CPU0_SW, "RTC_SW_CPU_RESET != RESET_REASON_CPU0_SW");
-ESP_STATIC_ASSERT((soc_reset_reason_t)RTCWDT_CPU_RESET == RESET_REASON_CPU0_RTC_WDT, "RTCWDT_CPU_RESET != RESET_REASON_CPU0_RTC_WDT");
-ESP_STATIC_ASSERT((soc_reset_reason_t)RTCWDT_BROWN_OUT_RESET == RESET_REASON_SYS_BROWN_OUT, "RTCWDT_BROWN_OUT_RESET != RESET_REASON_SYS_BROWN_OUT");
-ESP_STATIC_ASSERT((soc_reset_reason_t)RTCWDT_RTC_RESET == RESET_REASON_SYS_RTC_WDT, "RTCWDT_RTC_RESET != RESET_REASON_SYS_RTC_WDT");
-ESP_STATIC_ASSERT((soc_reset_reason_t)TG1WDT_CPU_RESET == RESET_REASON_CPU0_MWDT1, "TG1WDT_CPU_RESET != RESET_REASON_CPU0_MWDT1");
+ESP_STATIC_ASSERT((soc_reset_reason_t)SW_SYS_RESET == RESET_REASON_CORE_SW, "SW_SYS_RESET != RESET_REASON_CORE_SW");
+ESP_STATIC_ASSERT((soc_reset_reason_t)PMU_SYS_PWR_DOWN_RESET == RESET_REASON_CORE_PMU_PWR_DOWN, "PMU_SYS_PWR_DOWN_RESET != RESET_REASON_CORE_PMU_PWR_DOWN");
+ESP_STATIC_ASSERT((soc_reset_reason_t)PMU_SYS_PWR_DOWN_RESET == RESET_REASON_CORE_DEEP_SLEEP, "PMU_SYS_PWR_DOWN_RESET != RESET_REASON_CORE_DEEP_SLEEP");
+ESP_STATIC_ASSERT((soc_reset_reason_t)HP_SYS_HP_WDT_RESET == RESET_REASON_CORE_MWDT, "HP_SYS_HP_WDT_RESET != RESET_REASON_CORE_MWDT");
+ESP_STATIC_ASSERT((soc_reset_reason_t)HP_SYS_LP_WDT_RESET == RESET_REASON_CORE_RWDT, "HP_SYS_LP_WDT_RESET != RESET_REASON_CORE_RWDT");
+ESP_STATIC_ASSERT((soc_reset_reason_t)HP_CORE_HP_WDT_RESET == RESET_REASON_CPU_MWDT, "HP_CORE_HP_WDT_RESET != RESET_REASON_CPU_MWDT");
+ESP_STATIC_ASSERT((soc_reset_reason_t)SW_CPU_RESET == RESET_REASON_CPU0_SW, "SW_CPU_RESET != RESET_REASON_CPU0_SW");
+ESP_STATIC_ASSERT((soc_reset_reason_t)SW_CPU_RESET == RESET_REASON_CPU_SW, "SW_CPU_RESET != RESET_REASON_CPU_SW");
+ESP_STATIC_ASSERT((soc_reset_reason_t)HP_CORE_LP_WDT_RESET == RESET_REASON_CPU_RWDT, "HP_CORE_LP_WDT_RESET != RESET_REASON_CPU_RWDT");
+ESP_STATIC_ASSERT((soc_reset_reason_t)BROWN_OUT_RESET  == RESET_REASON_SYS_BROWN_OUT, "BROWN_OUT_RESET != RESET_REASON_SYS_BROWN_OUT");
+ESP_STATIC_ASSERT((soc_reset_reason_t)CHIP_LP_WDT_RESET == RESET_REASON_SYS_RWDT, "CHIP_LP_WDT_RESET != RESET_REASON_SYS_RWDT");
 ESP_STATIC_ASSERT((soc_reset_reason_t)SUPER_WDT_RESET == RESET_REASON_SYS_SUPER_WDT, "SUPER_WDT_RESET != RESET_REASON_SYS_SUPER_WDT");
-ESP_STATIC_ASSERT((soc_reset_reason_t)EFUSE_RESET == RESET_REASON_CORE_EFUSE_CRC, "EFUSE_RESET != RESET_REASON_CORE_EFUSE_CRC");
-// ESP32P4-TODO
-//_Static_assert((soc_reset_reason_t)USB_UART_CHIP_RESET == RESET_REASON_CORE_USB_UART, "USB_UART_CHIP_RESET != RESET_REASON_CORE_USB_UART");
-//_Static_assert((soc_reset_reason_t)USB_JTAG_CHIP_RESET == RESET_REASON_CORE_USB_JTAG, "USB_JTAG_CHIP_RESET != RESET_REASON_CORE_USB_JTAG");
-//_Static_assert((soc_reset_reason_t)JTAG_RESET == RESET_REASON_CPU0_JTAG, "JTAG_RESET != RESET_REASON_CPU0_JTAG");
+ESP_STATIC_ASSERT((soc_reset_reason_t)GLITCH_RTC_RESET == RESET_REASON_CORE_PWR_GLITCH, "GLITCH_RTC_RESET != RESET_REASON_CORE_PWR_GLITCH");
+ESP_STATIC_ASSERT((soc_reset_reason_t)EFUSE_CRC_ERR_RESET == RESET_REASON_CORE_EFUSE_CRC, "EFUSE_RESET != RESET_REASON_CORE_EFUSE_CRC");
+ESP_STATIC_ASSERT((soc_reset_reason_t)CHIP_USB_JTAG_RESET == RESET_REASON_CORE_USB_JTAG, "CHIP_USB_JTAG_RESET != RESET_REASON_CORE_USB_JTAG");
+ESP_STATIC_ASSERT((soc_reset_reason_t)CHIP_USB_UART_RESET == RESET_REASON_CORE_USB_UART, "CHIP_USB_UART_RESET != RESET_REASON_CORE_USB_UART");
+ESP_STATIC_ASSERT((soc_reset_reason_t)JTAG_RESET == RESET_REASON_CPU_JTAG, "JTAG_RESET != RESET_REASON_CPU_JTAG");
+ESP_STATIC_ASSERT((soc_reset_reason_t)CPU_LOCKUP_RESET == RESET_REASON_CPU_LOCKUP, "CPU_LOCKUP_RESET != RESET_REASON_CPU_LOCKUP");
+
 
 typedef enum {
     NO_SLEEP        = 0,
@@ -183,8 +202,7 @@ static inline void rtc_suppress_rom_log(void)
      * you need to write to this register in the same format.
      * Namely, the upper 16 bits and lower should be the same.
      */
-    // REG_SET_BIT(LP_SYS_LP_STORE4_REG, RTC_DISABLE_ROM_LOG);
-  abort();
+    REG_SET_BIT(LP_SYSTEM_REG_LP_STORE4_REG, RTC_DISABLE_ROM_LOG);
 }
 
 /**

@@ -83,6 +83,15 @@ SPI 以太网模块的初始化过程已经简化。此前，你需要在实例�
 
 现在，SPI 设备已在内部分配，因此无需再调用 :cpp:func:`spi_bus_add_device`。:cpp:class:`eth_dm9051_config_t`、:cpp:class:`eth_w5500_config_t` 和 :cpp:class:`eth_ksz8851snl_config_t` 配置结构体现已包含 SPI 设备配置成员（例如，可以微调可能依赖 PCB 设计的 SPI 时序）。``ETH_DM9051_DEFAULT_CONFIG``、``ETH_W5500_DEFAULT_CONFIG`` 和 ``ETH_KSZ8851SNL_DEFAULT_CONFIG`` 配置初始化宏也已接受新的参数输入。了解 SPI 以太网模块初始化示例，请查看 :doc:`以太网 API 参考指南<../../../api-reference/network/esp_eth>`。
 
+Ethernet 驱动
+----------------
+
+用于创建 MAC 实例的 API (`esp_eth_mac_new_*()`) 的输入参数由一个配置参数改为两个，这两个参数用于
+
+* 供应商特定的 MAC 配置
+* Ethernet 驱动 MAC 配置
+
+该更新不仅适用于内部 Ethernet MAC :cpp:func:`esp_eth_mac_new_esp32()` 也适用于外部 MAC 设备，如 :cpp:func:`esp_eth_mac_new_ksz8851snl()`、 :cpp:func:`esp_eth_mac_new_dm9051()` 和 :cpp:func:`esp_eth_mac_new_w5500()`。
 
 .. _tcpip-adapter:
 
@@ -130,6 +139,8 @@ TCP/IP 适配器是在 ESP-IDF v4.1 之前使用的网络接口抽象组件。�
 * :component_file:`DHCP <esp_netif/include/esp_netif.h#L387>`
 * :component_file:`DNS <esp_netif/include/esp_netif.h#L516>`
 * :component_file:`IP address <esp_netif/include/esp_netif.h#L568>`
+
+TCP/IP 适配器 API ``tcpip_adapter_get_sta_list()`` 用于获取与软件接入点 (softAP) 相关联的 Wi-Fi 站点列表，现已移到 Wi-Fi 组件，并更名为 :cpp:func:`esp_wifi_ap_get_sta_list_with_ip()`，它是 ESP-NETIF API :cpp:func:`esp_netif_dhcps_get_clients_by_mac()` 一个特例。无论服务器在哪个网络接口上运行，该 API 都可更方便地提供连接到 DHCP 服务器的客户端列表。
 
 默认事件处理程序
 ^^^^^^^^^^^^^^^^^^^^^^

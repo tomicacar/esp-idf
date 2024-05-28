@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -68,7 +68,7 @@
 #define HSPI_PIN_NUM_WP     FSPI_PIN_NUM_WP
 #define HSPI_PIN_NUM_CS     FSPI_PIN_NUM_CS
 
-#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2
+#elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C5
 #define SPI1_CS_IO          26  //the pin which is usually used by the PSRAM cs
 #define SPI1_HD_IO          27  //the pin which is usually used by the PSRAM hd
 #define SPI1_WP_IO          28  //the pin which is usually used by the PSRAM wp
@@ -96,6 +96,24 @@
 #define FSPI_PIN_NUM_HD     4
 #define FSPI_PIN_NUM_WP     5
 #define FSPI_PIN_NUM_CS     17
+
+// Just use the same pins for HSPI
+#define HSPI_PIN_NUM_MOSI   FSPI_PIN_NUM_MOSI
+#define HSPI_PIN_NUM_MISO   FSPI_PIN_NUM_MISO
+#define HSPI_PIN_NUM_CLK    FSPI_PIN_NUM_CLK
+#define HSPI_PIN_NUM_HD     FSPI_PIN_NUM_HD
+#define HSPI_PIN_NUM_WP     FSPI_PIN_NUM_WP
+#define HSPI_PIN_NUM_CS     FSPI_PIN_NUM_CS
+
+#elif CONFIG_IDF_TARGET_ESP32P4
+
+// Normal IOMUX pins
+#define FSPI_PIN_NUM_MOSI   8
+#define FSPI_PIN_NUM_MISO   10
+#define FSPI_PIN_NUM_CLK    9
+#define FSPI_PIN_NUM_HD     6
+#define FSPI_PIN_NUM_WP     11
+#define FSPI_PIN_NUM_CS     7
 
 // Just use the same pins for HSPI
 #define HSPI_PIN_NUM_MOSI   FSPI_PIN_NUM_MOSI

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -64,6 +64,9 @@ esp_err_t esp_partition_write(const esp_partition_t *partition,
                               size_t dst_offset, const void *src, size_t size)
 {
     assert(partition != NULL);
+    if (partition->readonly) {
+        return ESP_ERR_NOT_ALLOWED;
+    }
     if (dst_offset > partition->size) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -103,6 +106,9 @@ esp_err_t esp_partition_write_raw(const esp_partition_t *partition,
                                   size_t dst_offset, const void *src, size_t size)
 {
     assert(partition != NULL);
+    if (partition->readonly) {
+        return ESP_ERR_NOT_ALLOWED;
+    }
     if (dst_offset > partition->size) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -118,6 +124,9 @@ esp_err_t esp_partition_erase_range(const esp_partition_t *partition,
                                     size_t offset, size_t size)
 {
     assert(partition != NULL);
+    if (partition->readonly) {
+        return ESP_ERR_NOT_ALLOWED;
+    }
     if (offset > partition->size) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -136,11 +145,11 @@ esp_err_t esp_partition_erase_range(const esp_partition_t *partition,
 
 /*
  * Note: current implementation ignores the possibility of multiple regions in the same partition being
- * mapped. Reference counting and address space re-use is delegated to spi_flash_mmap.
+ * mapped. Reference counting and address space reuse is delegated to spi_flash_mmap.
  *
  * If this becomes a performance issue (i.e. if we need to map multiple regions within the partition),
  * we can add esp_partition_mmapv which will accept an array of offsets and sizes, and return array of
- * mmaped pointers, and a single handle for all these regions.
+ * mapped pointers, and a single handle for all these regions.
  */
 esp_err_t esp_partition_mmap(const esp_partition_t *partition, size_t offset, size_t size,
                              esp_partition_mmap_memory_t memory,
@@ -193,9 +202,25 @@ bool esp_partition_check_identity(const esp_partition_t *partition_1, const esp_
     return false;
 }
 
+bool esp_partition_is_flash_region_writable(size_t addr, size_t size)
+{
+    esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
+    for (; it != NULL; it = esp_partition_next(it)) {
+        const esp_partition_t *p = esp_partition_get(it);
+        if (p->readonly) {
+            if (addr >= p->address && addr < p->address + p->size) {
+                return false;
+            }
+            if (addr < p->address && addr + size > p->address) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool esp_partition_main_flash_region_safe(size_t addr, size_t size)
 {
-    bool result = true;
     if (addr <= ESP_PARTITION_TABLE_OFFSET + ESP_PARTITION_TABLE_MAX_LEN) {
         return false;
     }
@@ -206,5 +231,5 @@ bool esp_partition_main_flash_region_safe(size_t addr, size_t size)
     if (addr < p->address && addr + size > p->address) {
         return false;
     }
-    return result;
+    return true;
 }

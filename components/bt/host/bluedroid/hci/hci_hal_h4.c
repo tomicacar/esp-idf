@@ -22,16 +22,20 @@
 #include "hci/hci_hal.h"
 #include "hci/hci_internals.h"
 #include "hci/hci_layer.h"
+#include "hci/hci_trans_int.h"
 #include "osi/thread.h"
 #include "osi/pkt_queue.h"
 #if (BLE_ADV_REPORT_FLOW_CONTROL == TRUE)
 #include "osi/mutex.h"
 #include "osi/alarm.h"
 #endif
+#if (BT_CONTROLLER_INCLUDED == TRUE)
 #include "esp_bt.h"
+#endif
+#include "esp_bluedroid_hci.h"
 #include "stack/hcimsgs.h"
 
-#if SOC_ESP_NIMBLE_CONTROLLER
+#if ((BT_CONTROLLER_INCLUDED == TRUE) && SOC_ESP_NIMBLE_CONTROLLER)
 #include "nimble/ble_hci_trans.h"
 #endif
 
@@ -39,6 +43,7 @@
 #include "l2c_int.h"
 #endif ///C2H_FLOW_CONTROL_INCLUDED == TRUE
 #include "stack/hcimsgs.h"
+#include "hci_log/bt_hci_log.h"
 
 #define HCI_BLE_EVENT 0x3e
 #define PACKET_TYPE_TO_INBOUND_INDEX(type) ((type) - 2)
@@ -87,7 +92,7 @@ typedef struct {
 
 static hci_hal_env_t hci_hal_env;
 static const hci_hal_t interface;
-static const esp_vhci_host_callback_t vhci_host_cb;
+static const esp_bluedroid_hci_driver_callbacks_t hci_host_cb;
 
 static void host_send_pkt_available_cb(void);
 static int host_recv_pkt_cb(uint8_t *data, uint16_t len);
@@ -138,14 +143,19 @@ static bool hci_hal_env_init(const hci_hal_callbacks_t *upper_callbacks, osi_thr
 
 static void hci_hal_env_deinit(void)
 {
-    fixed_queue_free(hci_hal_env.rx_q, osi_free_func);
+    fixed_queue_t *rx_q = hci_hal_env.rx_q;
+    struct pkt_queue *adv_rpt_q = hci_hal_env.adv_rpt_q;
+    struct osi_event *upstream_data_ready = hci_hal_env.upstream_data_ready;
+
     hci_hal_env.rx_q = NULL;
-
-    pkt_queue_destroy(hci_hal_env.adv_rpt_q, NULL);
     hci_hal_env.adv_rpt_q = NULL;
-
-    osi_event_delete(hci_hal_env.upstream_data_ready);
     hci_hal_env.upstream_data_ready = NULL;
+
+    fixed_queue_free(rx_q, osi_free_func);
+
+    pkt_queue_destroy(adv_rpt_q, NULL);
+
+    osi_event_delete(upstream_data_ready);
 
 #if (BLE_ADV_REPORT_FLOW_CONTROL == TRUE)
     hci_hal_env.cmd_buf_in_use = true;
@@ -167,7 +177,7 @@ static bool hal_open(const hci_hal_callbacks_t *upper_callbacks, void *task_thre
     hci_hal_env_init(upper_callbacks, (osi_thread_t *)task_thread);
 
     //register vhci host cb
-    if (esp_vhci_host_register_callback(&vhci_host_cb) != ESP_OK) {
+    if (hci_host_register_callback(&hci_host_cb) != ESP_OK) {
         return false;
     }
 
@@ -207,7 +217,7 @@ static uint16_t transmit_data(serial_data_type_t type,
     BTTRC_DUMP_BUFFER("Transmit Pkt", data, length);
 
     // TX Data to target
-    esp_vhci_host_send_packet(data, length);
+    hci_host_send_packet(data, length);
 
     // Be nice and restore the old value of that byte
     *(data) = previous_byte;
@@ -432,7 +442,7 @@ static void hci_hal_h4_hdl_rx_packet(BT_HDR *packet)
         uint8_t len = 0;
         STREAM_TO_UINT8(len, stream);
 #endif
-        HCI_TRACE_ERROR("Workround stream corrupted during LE SCAN: pkt_len=%d ble_event_len=%d\n",
+        HCI_TRACE_ERROR("Workaround stream corrupted during LE SCAN: pkt_len=%d ble_event_len=%d\n",
                   packet->len, len);
         osi_free(packet);
         return;
@@ -545,10 +555,14 @@ static int host_recv_pkt_cb(uint8_t *data, uint16_t len)
     bool is_adv_rpt = host_recv_adv_packet(data);
 
     if (!is_adv_rpt) {
+#if (BT_HCI_LOG_INCLUDED == TRUE)
+        uint8_t data_type = ((data[0] == 2) ? HCI_LOG_DATA_TYPE_C2H_ACL : data[0]);
+        bt_hci_log_record_hci_data(data_type, data, len);
+#endif // (BT_HCI_LOG_INCLUDED == TRUE)
         pkt_size = BT_HDR_SIZE + len;
         pkt = (BT_HDR *) osi_calloc(pkt_size);
         if (!pkt) {
-            HCI_TRACE_ERROR("%s couldn't aquire memory for inbound data buffer.\n", __func__);
+            HCI_TRACE_ERROR("%s couldn't acquire memory for inbound data buffer.\n", __func__);
             assert(0);
         }
 
@@ -558,6 +572,10 @@ static int host_recv_pkt_cb(uint8_t *data, uint16_t len)
         memcpy(pkt->data, data, len);
         fixed_queue_enqueue(hci_hal_env.rx_q, pkt, FIXED_QUEUE_MAX_TIMEOUT);
     } else {
+#if (BT_HCI_LOG_INCLUDED == TRUE)
+        // data type is adv report
+        bt_hci_log_record_hci_adv(HCI_LOG_DATA_TYPE_ADV, data, len);
+#endif // (BT_HCI_LOG_INCLUDED == TRUE)
 #if !BLE_ADV_REPORT_FLOW_CONTROL
         // drop the packets if pkt_queue length goes beyond upper limit
         if (pkt_queue_length(hci_hal_env.adv_rpt_q) > HCI_HAL_BLE_ADV_RPT_QUEUE_LEN_MAX) {
@@ -590,13 +608,14 @@ static int host_recv_pkt_cb(uint8_t *data, uint16_t len)
 
     return 0;
 }
-#if SOC_ESP_NIMBLE_CONTROLLER
+#if ((BT_CONTROLLER_INCLUDED == TRUE) && SOC_ESP_NIMBLE_CONTROLLER)
 
 int
 ble_hs_hci_rx_evt(uint8_t *hci_ev, void *arg)
 {
     if(esp_bluedroid_get_status() == ESP_BLUEDROID_STATUS_UNINITIALIZED) {
-	return 0;
+        ble_hci_trans_buf_free(hci_ev);
+        return 0;
     }
     uint16_t len = hci_ev[1] + 3;
     uint8_t *data = (uint8_t *)malloc(len);
@@ -625,7 +644,7 @@ ble_hs_rx_data(struct os_mbuf *om, void *arg)
 }
 
 #endif
-static const esp_vhci_host_callback_t vhci_host_cb = {
+static const esp_bluedroid_hci_driver_callbacks_t hci_host_cb = {
     .notify_host_send_available = host_send_pkt_available_cb,
     .notify_host_recv = host_recv_pkt_cb,
 };

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2019-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2019-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -241,6 +241,27 @@ size_t heap_caps_get_minimum_free_size( uint32_t caps );
  */
 size_t heap_caps_get_largest_free_block( uint32_t caps );
 
+/**
+ * @brief Start monitoring the value of minimum_free_bytes from the moment this
+ * function is called instead of from startup.
+ *
+ * @note This allows to detect local lows of the minimum_free_bytes value
+ * that wouldn't be detected otherwise.
+ *
+ * @return esp_err_t ESP_OK if the function executed properly
+ *                   ESP_FAIL if called when monitoring already active
+ */
+esp_err_t heap_caps_monitor_local_minimum_free_size_start(void);
+
+/**
+ * @brief Stop monitoring the value of minimum_free_bytes. After this call
+ * the minimum_free_bytes value calculated from startup will be returned in
+ * heap_caps_get_info and heap_caps_get_minimum_free_size.
+ *
+ * @return esp_err_t ESP_OK if the function executed properly
+ *                   ESP_FAIL if called when monitoring not active
+ */
+esp_err_t heap_caps_monitor_local_minimum_free_size_stop(void);
 
 /**
  * @brief Get heap info for all regions with the given capabilities.
@@ -422,6 +443,56 @@ void heap_caps_dump_all(void);
  *
  */
 size_t heap_caps_get_allocated_size( void *ptr );
+
+/**
+ * @brief Structure used to store heap related data passed to
+ * the walker callback function
+ */
+typedef struct walker_heap_info {
+    intptr_t start; ///< Start address of the heap in which the block is located
+    intptr_t end; ///< End address of the heap in which the block is located
+} walker_heap_into_t;
+
+/**
+ * @brief Structure used to store block related data passed to
+ * the walker callback function
+ */
+typedef struct walker_block_info {
+    void *ptr; ///< Pointer to the block data
+    size_t size; ///< The size of the block
+    bool used; ///< Block status. True: used, False: free
+} walker_block_info_t;
+
+/**
+ * @brief Function callback used to get information of memory block
+ * during calls to heap_caps_walk or heap_caps_walk_all
+ *
+ * @param heap_info See walker_heap_into_t
+ * @param block_info See walker_block_info_t
+ * @param user_data Opaque pointer to user defined data
+ *
+ * @return True to proceed with the heap traversal
+ *         False to stop the traversal of the current heap and continue
+ *         with the traversal of the next heap (if any)
+ */
+typedef bool (*heap_caps_walker_cb_t)(walker_heap_into_t heap_info, walker_block_info_t block_info, void *user_data);
+
+/**
+ * @brief Function called to walk through the heaps with the given set of capabilities
+ *
+ * @param caps The set of capabilities assigned to the heaps to walk through
+ * @param walker_func Callback called for each block of the heaps being traversed
+ * @param user_data Opaque pointer to user defined data
+ */
+void heap_caps_walk(uint32_t caps, heap_caps_walker_cb_t walker_func, void *user_data);
+
+/**
+ * @brief Function called to walk through all heaps defined by the heap component
+ *
+ * @param walker_func Callback called for each block of the heaps being traversed
+ * @param user_data Opaque pointer to user defined data
+ */
+void heap_caps_walk_all(heap_caps_walker_cb_t walker_func, void *user_data);
 
 #ifdef __cplusplus
 }

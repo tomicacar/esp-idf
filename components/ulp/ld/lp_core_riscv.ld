@@ -1,17 +1,26 @@
 /*
- * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "sdkconfig.h"
+#include "soc/soc.h"
+#include "ld.common"
+
+#if CONFIG_ESP_ROM_HAS_LP_ROM
+/* With LP-ROM memory layout is different due to LP ROM stack/data */
+#define ULP_MEM_START_ADDRESS SOC_RTC_DRAM_LOW + RESERVE_RTC_MEM
+#else
+#define ULP_MEM_START_ADDRESS (SOC_RTC_DRAM_LOW)
+#endif
 
 ENTRY(reset_vector)
 
 MEMORY
 {
     /*first 128byte for exception/interrupt vectors*/
-    vector_table(RX) :   ORIGIN = 0x50000000, LENGTH = 0x80
-    ram(RWX) :           ORIGIN = 0x50000080, LENGTH = CONFIG_ULP_COPROC_RESERVE_MEM - 0x80 - CONFIG_ULP_SHARED_MEM
+    vector_table(RX) :   ORIGIN = ULP_MEM_START_ADDRESS , LENGTH = 0x80
+    ram(RWX) :           ORIGIN = ULP_MEM_START_ADDRESS + 0x80, LENGTH = CONFIG_ULP_COPROC_RESERVE_MEM - 0x80 - CONFIG_ULP_SHARED_MEM
 }
 
 SECTIONS

@@ -66,7 +66,7 @@ Broker address can be set by usage of :cpp:class:`address <esp_mqtt_client_confi
 
 The :cpp:member:`uri <esp_mqtt_client_config_t::broker_t::address_t::uri>` field is used in the format ``scheme://hostname:port/path``.
 
--  Curently support ``mqtt``, ``mqtts``, ``ws``, ``wss`` schemes
+-  Currently support ``mqtt``, ``mqtts``, ``ws``, ``wss`` schemes
 -  MQTT over TCP samples:
 
    -  ``mqtt://mqtt.eclipseprojects.io``: MQTT over TCP, default port 1883
@@ -145,13 +145,13 @@ It is possible to set authentication parameters through the :cpp:class:`authenti
 
  * :cpp:member:`password <esp_mqtt_client_config_t::credentials_t::authentication_t::password>`: use a password by setting
  * :cpp:member:`certificate <esp_mqtt_client_config_t::credentials_t::authentication_t::certificate>` and :cpp:member:`key <esp_mqtt_client_config_t::credentials_t::authentication_t::key>`: mutual authentication with TLS, and both can be provided in PEM or DER format
- * :cpp:member:`use_secure_element <esp_mqtt_client_config_t::credentials_t::authentication_t::use_secure_element>`: use secure element available in ESP32-WROOM-32SE
+ * :cpp:member:`use_secure_element <esp_mqtt_client_config_t::credentials_t::authentication_t::use_secure_element>`: use secure element (ATECC608A) interfaced to ESP32
  * :cpp:member:`ds_data <esp_mqtt_client_config_t::credentials_t::authentication_t::ds_data>`: use Digital Signature Peripheral available in some Espressif devices
 
 Session
 ^^^^^^^^^^^
 
-For MQTT session related configurations, :cpp:class:`session <esp_mqtt_client_config_t::session_t>` fields should be used.
+For MQTT session-related configurations, :cpp:class:`session <esp_mqtt_client_config_t::session_t>` fields should be used.
 
 =======================
 Last Will and Testament
@@ -189,7 +189,7 @@ The following events may be posted by the MQTT client:
 * ``MQTT_EVENT_SUBSCRIBED``: The broker has acknowledged the client's subscribe request. The event data contains the message ID of the subscribe message.
 * ``MQTT_EVENT_UNSUBSCRIBED``: The broker has acknowledged the client's unsubscribe request. The event data contains the message ID of the unsubscribe message.
 * ``MQTT_EVENT_PUBLISHED``: The broker has acknowledged the client's publish message. This is only posted for QoS level 1 and 2, as level 0 does not use acknowledgements. The event data contains the message ID of the publish message.
-* ``MQTT_EVENT_DATA``: The client has received a publish message. The event data contains: message ID, name of the topic it was published to, received data and its length. For data that exceeds the internal buffer, multiple ``MQTT_EVENT_DATA`` events are posted and :cpp:member:`current_data_offset <esp_mqtt_event_t::current_data_offset>` and :cpp:member:`total_data_len<esp_mqtt_event_t::total_data_len>` from event data updated to keep track of the fragmented message.
+* ``MQTT_EVENT_DATA``: The client has received a publish message. The event data contains: message ID, name of the topic it was published to, received data and its length. For data that exceeds the internal buffer, multiple ``MQTT_EVENT_DATA`` events are posted and :cpp:member:`current_data_offset <esp_mqtt_event_t::current_data_offset>` and :cpp:member:`total_data_len <esp_mqtt_event_t::total_data_len>` from event data updated to keep track of the fragmented message.
 * ``MQTT_EVENT_ERROR``: The client has encountered an error. The field :cpp:type:`error_handle <esp_mqtt_error_codes_t>` in the event data contains :cpp:type:`error_type <esp_mqtt_error_type_t>` that can be used to identify the error. The type of error determines which parts of the :cpp:type:`error_handle <esp_mqtt_error_codes_t>` struct is filled.
 
 API Reference

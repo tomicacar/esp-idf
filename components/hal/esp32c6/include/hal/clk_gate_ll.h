@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -78,8 +78,6 @@ static inline uint32_t periph_ll_get_clk_en_mask(periph_module_t periph)
             return PCR_TSENS_CLK_EN;
         case PERIPH_SDIO_SLAVE_MODULE:
             return PCR_SDIO_SLAVE_CLK_EN;
-        case PERIPH_REGDMA_MODULE:
-            return PCR_REGDMA_CLK_EN;
         case PERIPH_ASSIST_DEBUG_MODULE:
             return PCR_ASSIST_CLK_EN;
         default:
@@ -93,7 +91,7 @@ static inline uint32_t periph_ll_get_rst_en_mask(periph_module_t periph, bool en
 
     switch (periph) {
         case PERIPH_SARADC_MODULE:
-            return PCR_SARADC_RST_EN;
+            return PCR_SARADC_REG_RST_EN;
         case PERIPH_RMT_MODULE:
             return PCR_RMT_RST_EN;
         case PERIPH_PCNT_MODULE:
@@ -161,8 +159,6 @@ static inline uint32_t periph_ll_get_rst_en_mask(periph_module_t periph, bool en
             return PCR_DS_RST_EN;
         case PERIPH_SDIO_SLAVE_MODULE:
             return PCR_SDIO_SLAVE_RST_EN;
-        case PERIPH_REGDMA_MODULE:
-            return PCR_REGDMA_RST_EN;
         case PERIPH_ASSIST_DEBUG_MODULE:
             return PCR_ASSIST_RST_EN;
         default:
@@ -229,8 +225,6 @@ static inline uint32_t periph_ll_get_clk_en_reg(periph_module_t periph)
             return PCR_TSENS_CLK_CONF_REG;
         case PERIPH_SDIO_SLAVE_MODULE:
             return PCR_SDIO_SLAVE_CONF_REG;
-        case PERIPH_REGDMA_MODULE:
-            return PCR_REGDMA_CONF_REG;
         case PERIPH_ASSIST_DEBUG_MODULE:
             return PCR_ASSIST_CONF_REG;
     default:
@@ -297,8 +291,6 @@ static inline uint32_t periph_ll_get_rst_en_reg(periph_module_t periph)
             return PCR_TSENS_CLK_CONF_REG;
         case PERIPH_SDIO_SLAVE_MODULE:
             return PCR_SDIO_SLAVE_CONF_REG;
-        case PERIPH_REGDMA_MODULE:
-            return PCR_REGDMA_CONF_REG;
         case PERIPH_ASSIST_DEBUG_MODULE:
             return PCR_ASSIST_CONF_REG;
     default:
@@ -328,19 +320,6 @@ static inline bool IRAM_ATTR periph_ll_periph_enabled(periph_module_t periph)
 {
     return REG_GET_BIT(periph_ll_get_rst_en_reg(periph), periph_ll_get_rst_en_mask(periph, false)) == 0 &&
            REG_GET_BIT(periph_ll_get_clk_en_reg(periph), periph_ll_get_clk_en_mask(periph)) != 0;
-}
-
-FORCE_INLINE_ATTR bool periph_ll_uart_enabled(uint32_t uart_num)
-{
-    HAL_ASSERT(uart_num < SOC_UART_HP_NUM);
-    uint32_t uart_clk_config_reg = ((uart_num == 0) ? PCR_UART0_CONF_REG :
-                                    (uart_num == 1) ? PCR_UART1_CONF_REG : 0);
-    uint32_t uart_rst_bit = ((uart_num == 0) ? PCR_UART0_RST_EN :
-                            (uart_num == 1) ? PCR_UART1_RST_EN : 0);
-    uint32_t uart_en_bit  = ((uart_num == 0) ? PCR_UART0_CLK_EN :
-                            (uart_num == 1) ? PCR_UART1_CLK_EN : 0);
-    return REG_GET_BIT(uart_clk_config_reg, uart_rst_bit) == 0 &&
-        REG_GET_BIT(uart_clk_config_reg, uart_en_bit) != 0;
 }
 
 #ifdef __cplusplus

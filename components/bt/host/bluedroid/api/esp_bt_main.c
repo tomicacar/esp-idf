@@ -1,17 +1,22 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
 
+#include "common/bt_target.h"
 #include "esp_bt_main.h"
 #include "btc/btc_task.h"
 #include "btc/btc_main.h"
+#if (BT_CONTROLLER_INCLUDED == TRUE)
 #include "esp_bt.h"
+#endif
 #include "osi/future.h"
 #include "osi/allocator.h"
 #include "config/stack_config.h"
+#include "hci_log/bt_hci_log.h"
+#include "bt_common.h"
 
 static bool bd_already_enable = false;
 static bool bd_already_init = false;
@@ -123,10 +128,12 @@ esp_err_t esp_bluedroid_init_with_cfg(esp_bluedroid_config_t *cfg)
         return ESP_ERR_INVALID_ARG;
     }
 
+#if (BT_CONTROLLER_INCLUDED == TRUE)
     if (esp_bt_controller_get_status() != ESP_BT_CONTROLLER_STATUS_ENABLED) {
         LOG_ERROR("Controller not initialised\n");
         return ESP_ERR_INVALID_STATE;
     }
+#endif
 
     if (bd_already_init) {
         LOG_ERROR("Bluedroid already initialised\n");
@@ -175,6 +182,10 @@ esp_err_t esp_bluedroid_init_with_cfg(esp_bluedroid_config_t *cfg)
 
     bd_already_init = true;
 
+#if (BT_HCI_LOG_INCLUDED == TRUE)
+    bt_hci_log_init();
+#endif // (BT_HCI_LOG_INCLUDED == TRUE)
+
     return ESP_OK;
 }
 
@@ -218,6 +229,10 @@ esp_err_t esp_bluedroid_deinit(void)
     btc_deinit();
 
     bluedriod_config_deinit();
+
+#if (BT_HCI_LOG_INCLUDED == TRUE)
+    bt_hci_log_deinit();
+#endif // (BT_HCI_LOG_INCLUDED == TRUE)
 
     bd_already_init = false;
 

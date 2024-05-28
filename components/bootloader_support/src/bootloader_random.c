@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: 2010-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2010-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "sdkconfig.h"
+#include "esp_log.h"
 #include "bootloader_random.h"
 #include "esp_cpu.h"
 #include "soc/wdev_reg.h"
@@ -27,6 +28,9 @@
   #if (defined CONFIG_IDF_TARGET_ESP32C6 || defined CONFIG_IDF_TARGET_ESP32H2)
     #define RNG_CPU_WAIT_CYCLE_NUM (80 * 16) // Keep the byte sampling frequency in the ~62KHz range which has been
                                              // tested.
+  #elif CONFIG_IDF_TARGET_ESP32P4
+    // bootloader tested with around 63 KHz bytes reading frequency
+    #define RNG_CPU_WAIT_CYCLE_NUM (CPU_CLK_FREQ_MHZ_BTLD * 16)
   #else
     #define RNG_CPU_WAIT_CYCLE_NUM (80 * 32 * 2) /* extra factor of 2 is precautionary */
   #endif
@@ -77,12 +81,9 @@
 #endif
     }
 }
+#endif // BOOTLOADER_BUILD
 
-#ifndef CONFIG_IDF_ENV_FPGA
-
-#else // CONFIG_IDF_ENV_FPGA
-#include "esp_log.h"
-
+#if CONFIG_IDF_ENV_FPGA
 static void s_non_functional(const char *func)
 {
     ESP_EARLY_LOGW("rand", "%s non-functional for FPGA builds", func);
@@ -97,7 +98,4 @@ void bootloader_random_disable()
 {
     s_non_functional(__func__);
 }
-
 #endif // CONFIG_IDF_ENV_FPGA
-
-#endif // BOOTLOADER_BUILD

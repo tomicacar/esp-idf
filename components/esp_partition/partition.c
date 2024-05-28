@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,7 +14,7 @@
  * should go back to #include "sys/queue.h" once the tests are switched to CMake
  * see IDF-7000
  */
-#if __has_include(<bsd/string.h>)
+#if __has_include(<bsd/sys/queue.h>)
 #include <bsd/sys/queue.h>
 #else
 #include "sys/queue.h"
@@ -27,15 +27,13 @@
 #if !CONFIG_IDF_TARGET_LINUX
 #include "esp_flash.h"
 #include "esp_flash_encrypt.h"
+#include "spi_flash_mmap.h"
 #endif
 #include "esp_log.h"
 #include "esp_rom_md5.h"
 #include "bootloader_util.h"
 
 #if CONFIG_IDF_TARGET_LINUX
-#if __has_include(<bsd/string.h>)
-#include <bsd/string.h>
-#endif
 #include "esp_private/partition_linux.h"
 #endif
 
@@ -154,6 +152,7 @@ static esp_err_t load_partitions(void)
         item->info.type = entry.type;
         item->info.subtype = entry.subtype;
         item->info.encrypted = entry.flags & PART_FLAG_ENCRYPTED;
+        item->info.readonly = entry.flags & PART_FLAG_READONLY;
         item->user_registered = false;
 
 #if CONFIG_IDF_TARGET_LINUX
@@ -233,13 +232,14 @@ static esp_err_t load_partitions(void)
     return err;
 }
 
-void unload_partitions(void)
+void esp_partition_unload_all(void)
 {
     _lock_acquire(&s_partition_list_lock);
     partition_list_item_t *it;
     partition_list_item_t *tmp;
     SLIST_FOREACH_SAFE(it, &s_partition_list, next, tmp) {
-        SLIST_REMOVE(&s_partition_list, it, partition_list_item_, next);
+        // Remove current head from the list and free it, new head is the next element
+        SLIST_REMOVE_HEAD(&s_partition_list, next);
         free(it);
     }
     _lock_release(&s_partition_list_lock);
@@ -349,7 +349,6 @@ const esp_partition_t *esp_partition_find_first(esp_partition_type_t type,
     return res;
 }
 
-
 void esp_partition_iterator_release(esp_partition_iterator_t iterator)
 {
     // iterator == NULL is okay
@@ -384,6 +383,7 @@ const esp_partition_t *esp_partition_verify(const esp_partition_t *partition)
     esp_partition_iterator_release(it);
     return NULL;
 }
+
 esp_err_t esp_partition_register_external(esp_flash_t *flash_chip, size_t offset, size_t size,
         const char *label, esp_partition_type_t type, esp_partition_subtype_t subtype,
         const esp_partition_t **out_partition)

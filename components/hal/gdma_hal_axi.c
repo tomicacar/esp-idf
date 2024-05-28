@@ -91,13 +91,16 @@ void gdma_axi_hal_enable_burst(gdma_hal_context_t *hal, int chan_id, gdma_channe
     }
 }
 
-void gdma_axi_hal_set_strategy(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_owner_check, bool en_desc_write_back)
+void gdma_axi_hal_set_strategy(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_owner_check, bool en_desc_write_back, bool eof_till_popped)
 {
     if (dir == GDMA_CHANNEL_DIRECTION_RX) {
         axi_dma_ll_rx_enable_owner_check(hal->axi_dma_dev, chan_id, en_owner_check);
+        // RX direction always has the descriptor write-back feature enabled
+        // RX direction don't need config eof_mode
     } else {
         axi_dma_ll_tx_enable_owner_check(hal->axi_dma_dev, chan_id, en_owner_check);
         axi_dma_ll_tx_enable_auto_write_back(hal->axi_dma_dev, chan_id, en_desc_write_back);
+        axi_dma_ll_tx_set_eof_mode(hal->axi_dma_dev, chan_id, eof_till_popped);
     }
 }
 
@@ -119,12 +122,12 @@ void gdma_axi_hal_clear_intr(gdma_hal_context_t *hal, int chan_id, gdma_channel_
     }
 }
 
-uint32_t gdma_axi_hal_read_intr_status(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir)
+uint32_t gdma_axi_hal_read_intr_status(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool raw)
 {
     if (dir == GDMA_CHANNEL_DIRECTION_RX) {
-        return axi_dma_ll_rx_get_interrupt_status(hal->axi_dma_dev, chan_id);
+        return axi_dma_ll_rx_get_interrupt_status(hal->axi_dma_dev, chan_id, raw);
     } else {
-        return axi_dma_ll_tx_get_interrupt_status(hal->axi_dma_dev, chan_id);
+        return axi_dma_ll_tx_get_interrupt_status(hal->axi_dma_dev, chan_id, raw);
     }
 }
 
@@ -206,6 +209,17 @@ uint32_t gdma_axi_hal_get_crc_result(gdma_hal_context_t *hal, int chan_id, gdma_
 }
 #endif // SOC_GDMA_SUPPORT_CRC
 
+#if SOC_GDMA_SUPPORT_ETM
+void gdma_axi_hal_enable_etm_task(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_or_dis)
+{
+    if (dir == GDMA_CHANNEL_DIRECTION_RX) {
+        axi_dma_ll_rx_enable_etm_task(hal->axi_dma_dev, chan_id, en_or_dis);
+    } else {
+        axi_dma_ll_tx_enable_etm_task(hal->axi_dma_dev, chan_id, en_or_dis);
+    }
+}
+#endif // SOC_GDMA_SUPPORT_ETM
+
 void gdma_axi_hal_init(gdma_hal_context_t *hal, const gdma_hal_config_t *config)
 {
     hal->axi_dma_dev = AXI_DMA_LL_GET_HW(config->group_id - GDMA_LL_AXI_GROUP_START_ID);
@@ -229,4 +243,8 @@ void gdma_axi_hal_init(gdma_hal_context_t *hal, const gdma_hal_config_t *config)
     hal->set_crc_poly = gdma_axi_hal_set_crc_poly;
     hal->get_crc_result = gdma_axi_hal_get_crc_result;
 #endif // SOC_GDMA_SUPPORT_CRC
+#if SOC_GDMA_SUPPORT_ETM
+    hal->enable_etm_task = gdma_axi_hal_enable_etm_task;
+#endif // SOC_GDMA_SUPPORT_ETM
+    axi_dma_ll_set_default_memory_range(hal->axi_dma_dev);
 }

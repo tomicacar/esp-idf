@@ -1,17 +1,25 @@
-# SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
-
 import logging
 import os
+import shutil
 import stat
 import sys
 import textwrap
 from pathlib import Path
-from typing import List, Union
+from typing import List
+from typing import Union
 
 import pytest
-from test_build_system_helpers import (APP_BINS, BOOTLOADER_BINS, PARTITION_BIN, IdfPyFunc, append_to_file,
-                                       file_contains, get_idf_build_env, replace_in_file, run_cmake_and_build)
+from test_build_system_helpers import APP_BINS
+from test_build_system_helpers import append_to_file
+from test_build_system_helpers import BOOTLOADER_BINS
+from test_build_system_helpers import file_contains
+from test_build_system_helpers import get_idf_build_env
+from test_build_system_helpers import IdfPyFunc
+from test_build_system_helpers import PARTITION_BIN
+from test_build_system_helpers import replace_in_file
+from test_build_system_helpers import run_cmake_and_build
 
 
 def assert_built(paths: Union[List[str], List[Path]]) -> None:
@@ -19,14 +27,19 @@ def assert_built(paths: Union[List[str], List[Path]]) -> None:
         assert os.path.exists(path)
 
 
-def test_build_alternative_directories(idf_py: IdfPyFunc, session_work_dir: Path, test_app_copy: Path) -> None:
+def test_build_alternative_directories(idf_py: IdfPyFunc, func_work_dir: Path, test_app_copy: Path) -> None:
     logging.info('Moving BUILD_DIR_BASE out of tree')
-    alt_build_dir = session_work_dir / 'alt_build'
-    idf_py('-B', str(alt_build_dir), 'build')
-    assert os.listdir(alt_build_dir) != [], 'No files found in new build directory!'
-    default_build_dir = test_app_copy / 'build'
-    if default_build_dir.exists():
-        assert os.listdir(default_build_dir) == [], f'Some files were incorrectly put into the default build directory: {default_build_dir}'
+    alt_build_dir = func_work_dir / 'alt_build'
+    try:
+        idf_py('-B', str(alt_build_dir), 'build')
+        assert os.listdir(alt_build_dir) != [], 'No files found in new build directory!'
+        default_build_dir = test_app_copy / 'build'
+        if default_build_dir.exists():
+            assert os.listdir(default_build_dir) == [], f'Some files were incorrectly put into the default build directory: {default_build_dir}'
+    except Exception:
+        raise
+    else:
+        shutil.rmtree(alt_build_dir)
 
     logging.info('BUILD_DIR_BASE inside default build directory')
     build_subdir_inside_build_dir = default_build_dir / 'subdirectory'
@@ -120,7 +133,7 @@ def test_build_compiler_flag_in_source_file(idf_py: IdfPyFunc, test_app_copy: Pa
 @pytest.mark.usefixtures('test_app_copy')
 def test_build_compiler_flags_no_overwriting(idf_py: IdfPyFunc) -> None:
     logging.info('Compiler flags cannot be overwritten')
-    # If the compiler flags are overriden, the following build command will
+    # If the compiler flags are overridden, the following build command will
     # cause issues at link time.
     idf_py('build', '-DCMAKE_C_FLAGS=', '-DCMAKE_CXX_FLAGS=')
 
@@ -158,14 +171,14 @@ def test_build_dfu(idf_py: IdfPyFunc) -> None:
 def test_build_uf2(idf_py: IdfPyFunc) -> None:
     logging.info('UF2 build works')
     ret = idf_py('uf2')
-    assert 'build/uf2.bin" has been written.' in ret.stdout, 'UF2 build should work for esp32'
+    assert 'build/uf2.bin, ready to be flashed with any ESP USB Bridge' in ret.stdout, 'UF2 build should work for esp32'
     assert_built(BOOTLOADER_BINS + APP_BINS + PARTITION_BIN + ['build/uf2.bin'])
     ret = idf_py('uf2-app')
-    assert 'build/uf2-app.bin" has been written.' in ret.stdout, 'UF2 build should work for application binary'
+    assert 'build/uf2-app.bin, ready to be flashed with any ESP USB Bridge' in ret.stdout, 'UF2 build should work for application binary'
     assert_built(['build/uf2-app.bin'])
     idf_py('set-target', 'esp32s2')
     ret = idf_py('uf2')
-    assert 'build/uf2.bin" has been written.' in ret.stdout, 'UF2 build should work for esp32s2'
+    assert 'build/uf2.bin, ready to be flashed with any ESP USB Bridge' in ret.stdout, 'UF2 build should work for esp32s2'
     assert_built(BOOTLOADER_BINS + APP_BINS + PARTITION_BIN + ['build/uf2.bin'])
 
 
@@ -201,3 +214,10 @@ def test_build_with_crlf_files(idf_py: IdfPyFunc, test_app_copy: Path, idf_copy:
     change_files_to_crlf(idf_copy)
     idf_py('build')
     assert_built(BOOTLOADER_BINS + APP_BINS + PARTITION_BIN)
+
+
+def test_build_cmake_executable_suffix(idf_py: IdfPyFunc, test_app_copy: Path) -> None:
+    logging.info('idf.py can build with CMAKE_EXECUTABLE_SUFFIX set')
+    append_to_file((test_app_copy / 'CMakeLists.txt'), 'set(CMAKE_EXECUTABLE_SUFFIX_CXX ".ext")')
+    ret = idf_py('build')
+    assert 'Project build complete' in ret.stdout, 'Build with CMAKE_EXECUTABLE_SUFFIX set failed'

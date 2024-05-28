@@ -1,13 +1,12 @@
 /*
- * SPDX-FileCopyrightText: 2020 Amazon.com, Inc. or its affiliates
+ * FreeRTOS Kernel V10.5.1 (ESP-IDF SMP modified)
+ * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ *
+ * SPDX-FileCopyrightText: 2021 Amazon.com, Inc. or its affiliates
  *
  * SPDX-License-Identifier: MIT
  *
- * SPDX-FileContributor: 2016-2023 Espressif Systems (Shanghai) CO LTD
- */
-/*
- * FreeRTOS Kernel V10.4.3
- * Copyright (C) 2019 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
+ * SPDX-FileContributor: 2023-2024 Espressif Systems (Shanghai) CO LTD
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -26,10 +25,9 @@
  * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * http://www.FreeRTOS.org
- * http://aws.amazon.com/freertos
+ * https://www.FreeRTOS.org
+ * https://github.com/FreeRTOS
  *
- * 1 tab == 4 spaces!
  */
 
 #ifndef PORTMACRO_H
@@ -39,11 +37,24 @@
 #include "freertos/FreeRTOSConfig.h"
 
 /* Macros used instead ofsetoff() for better performance of interrupt handler */
+#if CONFIG_FREERTOS_USE_LIST_DATA_INTEGRITY_CHECK_BYTES
+#define PORT_OFFSET_PX_STACK 0x40
+#else
 #define PORT_OFFSET_PX_STACK 0x30
-#define PORT_OFFSET_PX_END_OF_STACK (PORT_OFFSET_PX_STACK + \
-                                     /* void * pxDummy6 */ 4 + \
-                                     /* uint8_t ucDummy7[ configMAX_TASK_NAME_LEN ] */ CONFIG_FREERTOS_MAX_TASK_NAME_LEN + \
-                                     /* BaseType_t xDummyCoreID */ 4)
+#endif /* #if CONFIG_FREERTOS_USE_LIST_DATA_INTEGRITY_CHECK_BYTES */
+
+#if CONFIG_FREERTOS_UNICORE
+#define CORE_ID_SIZE        0
+#else
+#define CORE_ID_SIZE        4
+#endif
+
+#define PORT_OFFSET_PX_END_OF_STACK ( \
+    PORT_OFFSET_PX_STACK \
+    + 4                                 /* void * pxDummy6 */ \
+    + CONFIG_FREERTOS_MAX_TASK_NAME_LEN /* uint8_t ucDummy7[ configMAX_TASK_NAME_LEN ] */ \
+    + CORE_ID_SIZE                      /* BaseType_t xDummyCoreID */ \
+)
 
 #ifndef __ASSEMBLER__
 
@@ -135,7 +146,7 @@ typedef uint32_t TickType_t;
 UBaseType_t xPortSetInterruptMaskFromISR(void);
 
 /**
- * @brief Reenable interrupts in a nested manner (meant to be called from ISRs)
+ * @brief Re-enable interrupts in a nested manner (meant to be called from ISRs)
  *
  * @warning Only applies to current CPU.
  * @param prev_int_level Previous interrupt level
@@ -444,10 +455,22 @@ void vPortTCBPreDeleteHook( void *pxTCB );
  * - Maps to forward declared functions
  * ------------------------------------------------------------------------------------------------------------------ */
 
+// ----------------------- System --------------------------
+
+#if ( configNUMBER_OF_CORES > 1 )
+    #define portGET_CORE_ID()       xPortGetCoreID()
+#else /* configNUMBER_OF_CORES > 1 */
+    #define portGET_CORE_ID()       ((BaseType_t) 0);
+#endif /* configNUMBER_OF_CORES > 1 */
+
 // --------------------- Interrupts ------------------------
 
 #define portDISABLE_INTERRUPTS()            portSET_INTERRUPT_MASK_FROM_ISR()
-#define portENABLE_INTERRUPTS()             portCLEAR_INTERRUPT_MASK_FROM_ISR(1)
+#if !SOC_INT_CLIC_SUPPORTED
+#define portENABLE_INTERRUPTS()             portCLEAR_INTERRUPT_MASK_FROM_ISR(RVHAL_INTR_ENABLE_THRESH)
+#else
+#define portENABLE_INTERRUPTS()             portCLEAR_INTERRUPT_MASK_FROM_ISR(RVHAL_INTR_ENABLE_THRESH_CLIC)
+#endif /* !SOC_INT_CLIC_SUPPORTED */
 
 /**
  * ISR versions to enable/disable interrupts
@@ -487,7 +510,7 @@ void vPortTCBPreDeleteHook( void *pxTCB );
 #define portENTER_CRITICAL_ISR(mux)                 vPortEnterCriticalMultiCore(mux)
 #define portEXIT_CRITICAL_ISR(mux)                  vPortExitCriticalMultiCore(mux)
 
-#define portTRY_ENTER_CRITICAL_SAFE(mux, timeout)   xPortEnterCriticalTimeoutSafe(mux)
+#define portTRY_ENTER_CRITICAL_SAFE(mux, timeout)   xPortEnterCriticalTimeoutSafe(mux, timeout)
 #define portENTER_CRITICAL_SAFE(mux)                vPortEnterCriticalSafe(mux)
 #define portEXIT_CRITICAL_SAFE(mux)                 vPortExitCriticalSafe(mux)
 #else
@@ -521,7 +544,12 @@ void vPortTCBPreDeleteHook( void *pxTCB );
         portEXIT_CRITICAL(mux);             \
     }                                       \
 })
-#define portTRY_ENTER_CRITICAL_SAFE(mux, timeout)   portENTER_CRITICAL_SAFE(mux, timeout)
+#define portTRY_ENTER_CRITICAL_SAFE(mux, timeout)   ({  \
+    (void)timeout;                                      \
+    portENTER_CRITICAL_SAFE(mux);                       \
+    BaseType_t ret = pdPASS;                            \
+    ret;                                                \
+})
 
 #endif /* (configNUM_CORES > 1) */
 
@@ -555,6 +583,10 @@ void vPortTCBPreDeleteHook( void *pxTCB );
 */
 #define portYIELD_WITHIN_API() portYIELD()
 
+#if ( configNUMBER_OF_CORES > 1 )
+    #define portYIELD_CORE( xCoreID )     vPortYieldOtherCore( xCoreID )
+#endif /* configNUMBER_OF_CORES > 1 */
+
 // ------------------- Hook Functions ----------------------
 
 #define portSUPPRESS_TICKS_AND_SLEEP(idleTime) vApplicationSleep(idleTime)
@@ -562,11 +594,11 @@ void vPortTCBPreDeleteHook( void *pxTCB );
 // ------------------- Run Time Stats ----------------------
 
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()
-#define portGET_RUN_TIME_COUNTER_VALUE() 0
 #ifdef CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER
-/* Coarse resolution time (us) */
-#define portALT_GET_RUN_TIME_COUNTER_VALUE(x)    do {x = (uint32_t)esp_timer_get_time();} while(0)
-#endif
+#define portGET_RUN_TIME_COUNTER_VALUE()        ((configRUN_TIME_COUNTER_TYPE) esp_timer_get_time())
+#else
+#define portGET_RUN_TIME_COUNTER_VALUE()        0
+#endif // CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER
 
 // --------------------- TCB Cleanup -----------------------
 
@@ -638,24 +670,28 @@ static inline void __attribute__((always_inline)) vPortExitCriticalSafe(portMUX_
 
 FORCE_INLINE_ATTR bool xPortCanYield(void)
 {
-    uint32_t threshold = REG_READ(INTERRUPT_CORE0_CPU_INT_THRESH_REG);
-#if SOC_INT_CLIC_SUPPORTED
-    threshold = threshold >> (CLIC_CPU_INT_THRESH_S + (8 - NLBITS));
 
-    /* When CLIC is supported, the lowest interrupt threshold level is 0.
-     * Therefore, an interrupt threshold level above 0 would mean that we
-     * are either in a critical section or in an ISR.
+#if SOC_INT_CLIC_SUPPORTED
+    /* When CLIC is supported:
+     *  - The lowest interrupt threshold level is 0. Therefore, an interrupt threshold level above 0 would mean that we
+     *    are in a critical section.
+     *  - Since CLIC enables HW interrupt nesting, we do not have the updated interrupt level in the
+     *    INTERRUPT_CURRENT_CORE_INT_THRESH_REG register when nested interrupts occur. To know the current interrupt
+     *    level, we read the machine-mode interrupt level (mil) field from the mintstatus CSR. A non-zero value indicates
+     *    that we are in an interrupt context.
      */
-    return (threshold == 0);
-#endif /* SOC_INT_CLIC_SUPPORTED */
+    uint32_t threshold = rv_utils_get_interrupt_threshold();
+    uint32_t intr_level = rv_utils_get_interrupt_level();
+    return ((intr_level == 0) && (threshold == 0));
+#else/* !SOC_INT_CLIC_SUPPORTED */
+    uint32_t threshold = REG_READ(INTERRUPT_CURRENT_CORE_INT_THRESH_REG);
     /* when enter critical code, FreeRTOS will mask threshold to RVHAL_EXCM_LEVEL
      * and exit critical code, will recover threshold value (1). so threshold <= 1
      * means not in critical code
      */
     return (threshold <= 1);
+#endif
 }
-
-
 
 /* ------------------------------------------------------ Misc ---------------------------------------------------------
  * - Miscellaneous porting macros
@@ -663,6 +699,17 @@ FORCE_INLINE_ATTR bool xPortCanYield(void)
  * ------------------------------------------------------------------------------------------------------------------ */
 
 // -------------------- Heap Related -----------------------
+
+/**
+ * @brief Checks if a given piece of memory can be used to store a FreeRTOS list
+ *
+ * - Defined in heap_idf.c
+ *
+ * @param ptr Pointer to memory
+ * @return true Memory can be used to store a List
+ * @return false Otherwise
+ */
+bool xPortCheckValidListMem(const void *ptr);
 
 /**
  * @brief Checks if a given piece of memory can be used to store a task's TCB
@@ -686,6 +733,7 @@ bool xPortCheckValidTCBMem(const void *ptr);
  */
 bool xPortcheckValidStackMem(const void *ptr);
 
+#define portVALID_LIST_MEM(ptr)     xPortCheckValidListMem(ptr)
 #define portVALID_TCB_MEM(ptr)      xPortCheckValidTCBMem(ptr)
 #define portVALID_STACK_MEM(ptr)    xPortcheckValidStackMem(ptr)
 

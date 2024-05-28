@@ -1,15 +1,24 @@
-if(CONFIG_OPENTHREAD_ENABLED)
-    idf_build_get_property(idf_target IDF_TARGET)
+idf_build_get_property(idf_target IDF_TARGET)
+
+if(${idf_target} STREQUAL "linux")
+    return() # This component is not supported by the POSIX/Linux simulator
+endif()
+
+if(CONFIG_OPENTHREAD_ENABLED OR CONFIG_IDF_DOC_BUILD OR CONFIG_OPENTHREAD_SPINEL_ONLY)
 
     set(public_include_dirs
         "include"
         "openthread/include")
+endif()
+
+if(CONFIG_OPENTHREAD_ENABLED)
 
     set(private_include_dirs
         "openthread/examples/platforms"
         "openthread/include/openthread"
         "openthread/src"
         "openthread/src/core"
+        "openthread/src/lib"
         "openthread/src/lib/hdlc"
         "openthread/src/lib/spinel"
         "openthread/src/ncp"
@@ -23,6 +32,7 @@ if(CONFIG_OPENTHREAD_ENABLED)
         "openthread/src/core/common"
         "openthread/src/core/crypto"
         "openthread/src/core/diags"
+        "openthread/src/core/instance"
         "openthread/src/core/mac"
         "openthread/src/core/radio"
         "openthread/src/core/thread"
@@ -33,7 +43,7 @@ if(CONFIG_OPENTHREAD_ENABLED)
     set(exclude_srcs
         "openthread/examples/platforms/utils/logging_rtt.c"
         "openthread/examples/platforms/utils/soft_source_match_table.c"
-        "openthread/src/core/common/extension_example.cpp")
+        "openthread/src/core/instance/extension_example.cpp")
 
     if(CONFIG_OPENTHREAD_FTD OR CONFIG_OPENTHREAD_MTD)
         list(APPEND src_dirs
@@ -101,6 +111,9 @@ if(CONFIG_OPENTHREAD_ENABLED)
             "openthread/src/core/thread/mesh_forwarder_ftd.cpp"
             "openthread/src/core/thread/mesh_forwarder_mtd.cpp"
             "openthread/src/core/thread/mle.cpp"
+            "openthread/src/core/thread/mle_router.cpp"
+            "openthread/src/core/thread/mle_types.cpp"
+            "openthread/src/core/thread/neighbor.cpp"
             "openthread/src/core/thread/neighbor_table.cpp"
             "openthread/src/core/thread/network_data.cpp"
             "openthread/src/core/thread/network_data_leader.cpp"
@@ -138,6 +151,11 @@ if(CONFIG_OPENTHREAD_ENABLED)
             -Wno-maybe-uninitialized)
     endif()
 
+    if(CONFIG_OPENTHREAD_NCP_VENDOR_HOOK)
+        list(APPEND src_dirs
+            "src/ncp")
+    endif()
+
     if(NOT CONFIG_OPENTHREAD_DNS64_CLIENT)
         list(APPEND exclude_srcs
             "src/esp_openthread_dns64.c")
@@ -148,6 +166,11 @@ if(CONFIG_OPENTHREAD_ENABLED)
             "src/port/esp_openthread_sleep.c")
     endif()
 
+    if(NOT CONFIG_OPENTHREAD_PLATFORM_MSGPOOL_MANAGEMENT)
+        list(APPEND exclude_srcs
+            "src/port/esp_openthread_messagepool.c")
+    endif()
+
     if(CONFIG_OPENTHREAD_FTD)
         set(device_type "OPENTHREAD_FTD=1")
     elseif(CONFIG_OPENTHREAD_MTD)
@@ -155,6 +178,48 @@ if(CONFIG_OPENTHREAD_ENABLED)
     elseif(CONFIG_OPENTHREAD_RADIO)
         set(device_type "OPENTHREAD_RADIO=1")
     endif()
+elseif(CONFIG_OPENTHREAD_SPINEL_ONLY)
+
+    set(src_dirs
+        "src/spinel"
+        "src/port"
+        "openthread/src/lib/spinel"
+        "openthread/src/lib/hdlc"
+        "openthread/src/lib/platform"
+        "openthread/src/core/api"
+        "openthread/src/core/common"
+        "openthread/src/core/mac")
+
+    set(private_include_dirs
+        "private_include"
+        "openthread/src"
+        "openthread/src/core"
+        "openthread/src/lib"
+        "openthread/src/lib/hdlc"
+        "openthread/src/lib/spinel")
+
+    file(GLOB_RECURSE exclude_srcs_list
+        "src/port/*"
+        "openthread/src/core/api/*.cpp"
+        "openthread/src/core/common/*"
+        "openthread/src/core/mac/*")
+
+    list(REMOVE_ITEM exclude_srcs_list
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/port/esp_openthread_alarm.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/port/esp_openthread_logging.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/api/error_api.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/api/logging_api.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/common/error.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/common/error.hpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/common/log.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/common/log.hpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/common/logging.hpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/common/string.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/common/string.hpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/mac/mac_frame.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/openthread/src/core/mac/mac_frame.hpp")
+
+    list(APPEND exclude_srcs ${exclude_srcs_list})
 
 endif()
 
@@ -180,18 +245,20 @@ idf_component_register(SRC_DIRS "${src_dirs}"
                        EXCLUDE_SRCS "${exclude_srcs}"
                        INCLUDE_DIRS "${public_include_dirs}"
                        PRIV_INCLUDE_DIRS "${private_include_dirs}"
-                       REQUIRES esp_netif lwip driver
+                       REQUIRES esp_netif lwip esp_driver_uart driver
                        LDFRAGMENTS linker.lf
                        PRIV_REQUIRES console esp_event esp_partition esp_timer
                                      ieee802154 mbedtls nvs_flash)
 
-if(CONFIG_OPENTHREAD_ENABLED)
+if(CONFIG_OPENTHREAD_ENABLED OR CONFIG_OPENTHREAD_SPINEL_ONLY)
     if(CONFIG_OPENTHREAD_RADIO)
         set(CONFIG_FILE_TYPE "radio")
     elseif(CONFIG_OPENTHREAD_FTD)
         set(CONFIG_FILE_TYPE "ftd")
     elseif(CONFIG_OPENTHREAD_MTD)
         set(CONFIG_FILE_TYPE "mtd")
+    elseif(CONFIG_OPENTHREAD_SPINEL_ONLY)
+        set(CONFIG_FILE_TYPE "spinel")
     endif()
 
     target_compile_definitions(

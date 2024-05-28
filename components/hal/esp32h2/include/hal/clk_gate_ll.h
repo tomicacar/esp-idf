@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -78,8 +78,6 @@ static inline uint32_t periph_ll_get_clk_en_mask(periph_module_t periph)
             return PCR_ECDSA_CLK_EN;
         case PERIPH_TEMPSENSOR_MODULE:
             return PCR_TSENS_CLK_EN;
-        case PERIPH_REGDMA_MODULE:
-            return PCR_REGDMA_CLK_EN;
         // case PERIPH_RNG_MODULE:
         //     return PCR_WIFI_CLK_RNG_EN;
         // case PERIPH_WIFI_MODULE:
@@ -106,7 +104,7 @@ static inline uint32_t periph_ll_get_rst_en_mask(periph_module_t periph, bool en
 
     switch (periph) {
         case PERIPH_SARADC_MODULE:
-            return PCR_SARADC_RST_EN;
+            return PCR_SARADC_REG_RST_EN;
         case PERIPH_RMT_MODULE:
             return PCR_RMT_RST_EN;
         case PERIPH_PCNT_MODULE:
@@ -153,8 +151,6 @@ static inline uint32_t periph_ll_get_rst_en_mask(periph_module_t periph, bool en
                 CLEAR_PERI_REG_MASK(PCR_ECDSA_CONF_REG, PCR_ECDSA_RST_EN);
             }
             return PCR_ECC_RST_EN;
-        case PERIPH_REGDMA_MODULE:
-            return PCR_REGDMA_RST_EN;
         case PERIPH_AES_MODULE:
             if (enable == true) {
                 // Clear reset on digital signature, otherwise AES unit is held in reset
@@ -268,8 +264,6 @@ static inline uint32_t periph_ll_get_clk_en_reg(periph_module_t periph)
             return PCR_ECDSA_CONF_REG;
         case PERIPH_TEMPSENSOR_MODULE:
             return PCR_TSENS_CLK_CONF_REG;
-        case PERIPH_REGDMA_MODULE:
-            return PCR_REGDMA_CONF_REG;
         case PERIPH_ASSIST_DEBUG_MODULE:
             return PCR_ASSIST_CONF_REG;
     default:
@@ -337,8 +331,6 @@ static inline uint32_t periph_ll_get_rst_en_reg(periph_module_t periph)
             return PCR_ECDSA_CONF_REG;
         case PERIPH_TEMPSENSOR_MODULE:
             return PCR_TSENS_CLK_CONF_REG;
-        case PERIPH_REGDMA_MODULE:
-            return PCR_REGDMA_CONF_REG;
         case PERIPH_ASSIST_DEBUG_MODULE:
             return PCR_ASSIST_CONF_REG;
     default:
@@ -358,16 +350,14 @@ static inline void periph_ll_disable_clk_set_rst(periph_module_t periph)
     SET_PERI_REG_MASK(periph_ll_get_rst_en_reg(periph), periph_ll_get_rst_en_mask(periph, false));
 }
 
-static inline void periph_ll_wifi_bt_module_enable_clk_clear_rst(void)
+static inline void periph_ll_wifi_bt_module_enable_clk(void)
 {
     // DPORT_SET_PERI_REG_MASK(SYSTEM_WIFI_CLK_EN_REG, SYSTEM_WIFI_CLK_WIFI_BT_COMMON_M);// ESP32H2-TODO: IDF-6400
-    // DPORT_CLEAR_PERI_REG_MASK(SYSTEM_CORE_RST_EN_REG, 0);
 }
 
-static inline void periph_ll_wifi_bt_module_disable_clk_set_rst(void)
+static inline void periph_ll_wifi_bt_module_disable_clk(void)
 {
     // DPORT_CLEAR_PERI_REG_MASK(SYSTEM_WIFI_CLK_EN_REG, SYSTEM_WIFI_CLK_WIFI_BT_COMMON_M);// ESP32H2-TODO: IDF-6400
-    // DPORT_SET_PERI_REG_MASK(SYSTEM_CORE_RST_EN_REG, 0);
 }
 
 static inline void periph_ll_reset(periph_module_t periph)
@@ -392,19 +382,6 @@ static inline void periph_ll_wifi_module_disable_clk_set_rst(void)
 {
     // DPORT_CLEAR_PERI_REG_MASK(SYSTEM_WIFI_CLK_EN_REG, SYSTEM_WIFI_CLK_WIFI_EN_M);// ESP32H2-TODO: IDF-6400
     // DPORT_SET_PERI_REG_MASK(SYSTEM_CORE_RST_EN_REG, 0);
-}
-
-FORCE_INLINE_ATTR bool periph_ll_uart_enabled(uint32_t uart_num)
-{
-    HAL_ASSERT(uart_num < SOC_UART_HP_NUM);
-    uint32_t uart_clk_config_reg = ((uart_num == 0) ? PCR_UART0_CONF_REG :
-                                    (uart_num == 1) ? PCR_UART1_CONF_REG : 0);
-    uint32_t uart_rst_bit = ((uart_num == 0) ? PCR_UART0_RST_EN :
-                            (uart_num == 1) ? PCR_UART1_RST_EN : 0);
-    uint32_t uart_en_bit  = ((uart_num == 0) ? PCR_UART0_CLK_EN :
-                            (uart_num == 1) ? PCR_UART1_CLK_EN : 0);
-    return REG_GET_BIT(uart_clk_config_reg, uart_rst_bit) == 0 &&
-        REG_GET_BIT(uart_clk_config_reg, uart_en_bit) != 0;
 }
 
 #ifdef __cplusplus

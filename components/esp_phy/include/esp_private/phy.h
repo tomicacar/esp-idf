@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -139,6 +139,84 @@ void phy_eco_version_sel(uint8_t chip_ver);
  */
 void phy_improve_rx_special(bool enable);
 #endif
+
+/**
+ * @brief Enable phy track pll
+ *
+ */
+void phy_track_pll_init(void);
+
+/**
+ * @brief Disable phy track pll
+ *
+ */
+void phy_track_pll_deinit(void);
+
+/**
+ * @brief Set the flag recorded which modem has already enabled phy
+ *
+ */
+void phy_set_modem_flag(esp_phy_modem_t modem);
+
+/**
+ * @brief Clear the flag to record which modem calls phy disenable
+ */
+void phy_clr_modem_flag(esp_phy_modem_t modem);
+
+/**
+ * @brief Get the flag recorded which modem has already enabled phy
+ *
+ */
+esp_phy_modem_t phy_get_modem_flag(void);
+
+/**
+ * @brief Get the PHY lock, only used in esp_phy, the user should not use this function.
+ *
+ */
+_lock_t phy_get_lock(void);
+
+/**
+ * @brief Call this funnction to track pll immediately.
+ *
+ */
+void phy_track_pll(void);
+
+/**
+ * @brief PHY antenna default configuration
+ *
+ */
+void ant_dft_cfg(bool default_ant);
+
+/**
+ * @brief PHY tx antenna config
+ *
+ */
+void ant_tx_cfg(uint8_t ant0);
+
+/**
+ * @brief PHY rx antenna config
+ *
+ */
+void ant_rx_cfg(bool auto_en, uint8_t ant0, uint8_t ant1);
+
+/**
+ * @brief PHY antenna need update
+ *
+ */
+bool phy_ant_need_update(void);
+
+/**
+ * @brief PHY antenna need update
+ *
+ */
+void phy_ant_clr_update_flag(void);
+
+/**
+ * @brief PHY antenna configuration update
+ *
+ */
+void phy_ant_update(void);
+
 
 #ifdef __cplusplus
 }

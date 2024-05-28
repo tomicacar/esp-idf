@@ -52,7 +52,9 @@ HTTPS 请求
 
 ESP HTTP 客户端支持使用 **mbedTLS** 的 SSL 连接，需将 ``url`` 配置为以 ``https`` 开头，或将 ``transport_type`` 设置为 ``HTTP_TRANSPORT_OVER_SSL``。可以通过 :ref:`CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS` 来配置 HTTPS 支持（默认启用）。
 
-.. note:: 在发起 HTTPS 请求时，如需服务器验证，首先需要向 ``esp_http_client_config_t`` 配置中的 ``cert_pem`` 成员提供额外的根证书（PEM 格式）。用户还可以通过 ``esp_http_client_config_t`` 配置中的 ``crt_bundle_attach`` 成员，使用 ``ESP x509 Certificate Bundle`` 进行服务器验证。
+.. note::
+
+    在发起 HTTPS 请求时，如需服务器验证，首先需要向 ``esp_http_client_config_t`` 配置中的 ``cert_pem`` 成员提供额外的根证书（PEM 格式）。用户还可以通过 ``esp_http_client_config_t`` 配置中的 ``crt_bundle_attach`` 成员，使用 ``ESP x509 Certificate Bundle`` 进行服务器验证。
 
 如需了解上文备注中的实现细节，请参考应用示例中的函数 ``https_with_url`` 和 ``https_with_hostname_path``。
 
@@ -81,6 +83,7 @@ ESP HTTP 客户端同时支持 **基本** 和 **摘要** 认证。
     * 用户可以在 ``url`` 或 ``esp_http_client_config_t`` 配置中的 ``username`` 和 ``password`` 处输入用户名和密码。对于 ``auth_type = HTTP_AUTH_TYPE_BASIC``，HTTP 客户端只需执行一项操作就可通过认证过程。
     * 如果 ``auth_type = HTTP_AUTH_TYPE_NONE``，但配置中有 ``username`` 和 ``password`` 字段，HTTP 客户端需要执行两项操作。客户端在第一次尝试连接服务器时，会收到 ``401 Unauthorized`` 头，而后再根据这些信息来选择认证方法，并在第二项操作中执行。
     * 如需了解实现细节，请参考应用示例中的函数 ``http_auth_basic``、 ``http_auth_basic_redirect`` （用于基本认证）和 ``http_auth_digest`` （用于摘要认证）。
+    * 目前，摘要认证仅支持 MD5 和 SHA-256 算法。
 
 
 认证配置示例
@@ -135,6 +138,20 @@ ESP HTTP 客户端诊断信息
     - HTTP_EVENT_REDIRECT         :   ``esp_http_client_redirect_event_data_t``
 
 在无法接收到 :cpp:enumerator:`HTTP_EVENT_DISCONNECTED <esp_http_client_event_id_t::HTTP_EVENT_DISCONNECTED>` 之前，与事件数据一起接收到的 :cpp:type:`esp_http_client_handle_t` 将始终有效。这个句柄主要是为了区分不同的客户端连接，无法用于其他目的，因为它可能会随着客户端连接状态的变化而改变。
+
+TLS 协议版本
+--------------------
+
+可在 :cpp:type:`esp_http_client_config_t` 中设置用于底层 TLS 连接的 TLS 协议版本。了解更多信息，请参考 :doc:`/api-reference/protocols/esp_tls` 中的 **TLS 协议版本** 章节。
+
+HTTP 客户端的 TLS 协议版本可按如下方式配置：
+
+    .. code-block:: c
+
+        #include "esp_http_client.h"
+        esp_http_client_config_t config = {
+            .tls_version = ESP_HTTP_CLIENT_TLS_VER_TLS_1_2,
+        };
 
 API 参考
 ---------

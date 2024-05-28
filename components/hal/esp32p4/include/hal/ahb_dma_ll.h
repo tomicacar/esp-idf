@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include "hal/assert.h"
 #include "hal/misc.h"
+#include "hal/hal_utils.h"
 #include "hal/gdma_types.h"
 #include "hal/gdma_ll.h"
 #include "soc/ahb_dma_struct.h"
@@ -56,14 +57,30 @@ static inline void ahb_dma_ll_reset_fsm(ahb_dma_dev_t *dev)
     dev->misc_conf.ahbm_rst_inter = 0;
 }
 
+/**
+ * @brief Preset valid memory range for AHB-DMA
+ *
+ * @param dev DMA register base address
+ */
+static inline void ahb_dma_ll_set_default_memory_range(ahb_dma_dev_t *dev)
+{
+    // AHB-DMA can access L2MEM, L2ROM, MSPI Flash, MSPI PSRAM
+    dev->intr_mem_start_addr.val = 0x40000000;
+    dev->intr_mem_end_addr.val = 0x4FFC0000;
+}
+
 ///////////////////////////////////// RX /////////////////////////////////////////
 /**
  * @brief Get DMA RX channel interrupt status word
  */
 __attribute__((always_inline))
-static inline uint32_t ahb_dma_ll_rx_get_interrupt_status(ahb_dma_dev_t *dev, uint32_t channel)
+static inline uint32_t ahb_dma_ll_rx_get_interrupt_status(ahb_dma_dev_t *dev, uint32_t channel, bool raw)
 {
-    return dev->in_intr[channel].st.val;
+    if (raw) {
+        return dev->in_intr[channel].raw.val;
+    } else {
+        return dev->in_intr[channel].st.val;
+    }
 }
 
 /**
@@ -210,9 +227,9 @@ static inline void ahb_dma_ll_rx_enable_auto_return(ahb_dma_dev_t *dev, uint32_t
 }
 
 /**
- * @brief Check if DMA RX FSM is in IDLE state
+ * @brief Check if DMA RX descriptor FSM is in IDLE state
  */
-static inline bool ahb_dma_ll_rx_is_fsm_idle(ahb_dma_dev_t *dev, uint32_t channel)
+static inline bool ahb_dma_ll_rx_is_desc_fsm_idle(ahb_dma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].in.in_link.inlink_park_chn;
 }
@@ -285,9 +302,13 @@ static inline void ahb_dma_ll_rx_enable_etm_task(ahb_dma_dev_t *dev, uint32_t ch
  * @brief Get DMA TX channel interrupt status word
  */
 __attribute__((always_inline))
-static inline uint32_t ahb_dma_ll_tx_get_interrupt_status(ahb_dma_dev_t *dev, uint32_t channel)
+static inline uint32_t ahb_dma_ll_tx_get_interrupt_status(ahb_dma_dev_t *dev, uint32_t channel, bool raw)
 {
-    return dev->out_intr[channel].st.val;
+    if (raw) {
+        return dev->out_intr[channel].raw.val;
+    } else {
+        return dev->out_intr[channel].st.val;
+    }
 }
 
 /**
@@ -442,9 +463,9 @@ static inline void ahb_dma_ll_tx_restart(ahb_dma_dev_t *dev, uint32_t channel)
 }
 
 /**
- * @brief Check if DMA TX FSM is in IDLE state
+ * @brief Check if DMA TX descriptor FSM is in IDLE state
  */
-static inline bool ahb_dma_ll_tx_is_fsm_idle(ahb_dma_dev_t *dev, uint32_t channel)
+static inline bool ahb_dma_ll_tx_is_desc_fsm_idle(ahb_dma_dev_t *dev, uint32_t channel)
 {
     return dev->channel[channel].out.out_link.outlink_park_chn;
 }
@@ -509,8 +530,8 @@ static inline void ahb_dma_ll_tx_enable_etm_task(ahb_dma_dev_t *dev, uint32_t ch
  */
 static inline void ahb_dma_ll_tx_crc_clear(ahb_dma_dev_t *dev, uint32_t channel)
 {
-    dev->out_crc[channel].crc_clear.out_crc_clear_chn_reg = 1;
-    dev->out_crc[channel].crc_clear.out_crc_clear_chn_reg = 0;
+    dev->out_crc_arb[channel].crc_clear.out_crc_clear_chn_reg = 1;
+    dev->out_crc_arb[channel].crc_clear.out_crc_clear_chn_reg = 0;
 }
 
 /**
@@ -519,7 +540,7 @@ static inline void ahb_dma_ll_tx_crc_clear(ahb_dma_dev_t *dev, uint32_t channel)
 static inline void ahb_dma_ll_tx_crc_set_width(ahb_dma_dev_t *dev, uint32_t channel, uint32_t width)
 {
     HAL_ASSERT(width <= 32);
-    dev->out_crc[channel].crc_width.tx_crc_width_chn = (width - 1) / 8;
+    dev->out_crc_arb[channel].crc_width.tx_crc_width_chn = (width - 1) / 8;
 }
 
 /**
@@ -527,7 +548,7 @@ static inline void ahb_dma_ll_tx_crc_set_width(ahb_dma_dev_t *dev, uint32_t chan
  */
 static inline void ahb_dma_ll_tx_crc_set_init_value(ahb_dma_dev_t *dev, uint32_t channel, uint32_t value)
 {
-    dev->out_crc[channel].crc_init_data.out_crc_init_data_chn = value;
+    dev->out_crc_arb[channel].crc_init_data.out_crc_init_data_chn = value;
 }
 
 /**
@@ -535,7 +556,7 @@ static inline void ahb_dma_ll_tx_crc_set_init_value(ahb_dma_dev_t *dev, uint32_t
  */
 static inline uint32_t ahb_dma_ll_tx_crc_get_result(ahb_dma_dev_t *dev, uint32_t channel)
 {
-    return dev->out_crc[channel].crc_final_result.out_crc_final_result_chn;
+    return dev->out_crc_arb[channel].crc_final_result.out_crc_final_result_chn;
 }
 
 /**
@@ -543,24 +564,24 @@ static inline uint32_t ahb_dma_ll_tx_crc_get_result(ahb_dma_dev_t *dev, uint32_t
  */
 static inline void ahb_dma_ll_tx_crc_latch_config(ahb_dma_dev_t *dev, uint32_t channel)
 {
-    dev->out_crc[channel].crc_width.tx_crc_latch_flag_chn = 1;
-    dev->out_crc[channel].crc_width.tx_crc_latch_flag_chn = 0;
+    dev->out_crc_arb[channel].crc_width.tx_crc_latch_flag_chn = 1;
+    dev->out_crc_arb[channel].crc_width.tx_crc_latch_flag_chn = 0;
 }
 
 /**
  * @brief Set the lfsr and data mask that used by the Parallel CRC calculation formula for a given CRC bit, TX channel
  */
 static inline void ahb_dma_ll_tx_crc_set_lfsr_data_mask(ahb_dma_dev_t *dev, uint32_t channel, uint32_t crc_bit,
-        uint32_t lfsr_mask, uint32_t data_mask, bool reverse_data_mask)
+                                                        uint32_t lfsr_mask, uint32_t data_mask, bool reverse_data_mask)
 {
-    dev->out_crc[channel].crc_en_addr.tx_crc_en_addr_chn = crc_bit;
-    dev->out_crc[channel].crc_en_wr_data.tx_crc_en_wr_data_chn = lfsr_mask;
-    dev->out_crc[channel].crc_data_en_addr.tx_crc_data_en_addr_chn = crc_bit;
+    dev->out_crc_arb[channel].crc_en_addr.tx_crc_en_addr_chn = crc_bit;
+    dev->out_crc_arb[channel].crc_en_wr_data.tx_crc_en_wr_data_chn = lfsr_mask;
+    dev->out_crc_arb[channel].crc_data_en_addr.tx_crc_data_en_addr_chn = crc_bit;
     if (reverse_data_mask) {
         // "& 0xff" because the hardware only support 8-bit data
-        data_mask = _bitwise_reverse(data_mask & 0xFF);
+        data_mask = hal_utils_bitwise_reverse8(data_mask & 0xFF);
     }
-    HAL_FORCE_MODIFY_U32_REG_FIELD(dev->out_crc[channel].crc_data_en_wr_data, tx_crc_data_en_wr_data_chn, data_mask);
+    HAL_FORCE_MODIFY_U32_REG_FIELD(dev->out_crc_arb[channel].crc_data_en_wr_data, tx_crc_data_en_wr_data_chn, data_mask);
 }
 
 ///////////////////////////////////// CRC-RX /////////////////////////////////////////
@@ -570,8 +591,8 @@ static inline void ahb_dma_ll_tx_crc_set_lfsr_data_mask(ahb_dma_dev_t *dev, uint
  */
 static inline void ahb_dma_ll_rx_crc_clear(ahb_dma_dev_t *dev, uint32_t channel)
 {
-    dev->in_crc[channel].crc_clear.in_crc_clear_chn_reg = 1;
-    dev->in_crc[channel].crc_clear.in_crc_clear_chn_reg = 0;
+    dev->in_crc_arb[channel].crc_clear.in_crc_clear_chn_reg = 1;
+    dev->in_crc_arb[channel].crc_clear.in_crc_clear_chn_reg = 0;
 }
 
 /**
@@ -580,7 +601,7 @@ static inline void ahb_dma_ll_rx_crc_clear(ahb_dma_dev_t *dev, uint32_t channel)
 static inline void ahb_dma_ll_rx_crc_set_width(ahb_dma_dev_t *dev, uint32_t channel, uint32_t width)
 {
     HAL_ASSERT(width <= 32);
-    dev->in_crc[channel].crc_width.rx_crc_width_chn = (width - 1) / 8;
+    dev->in_crc_arb[channel].crc_width.rx_crc_width_chn = (width - 1) / 8;
 }
 
 /**
@@ -588,7 +609,7 @@ static inline void ahb_dma_ll_rx_crc_set_width(ahb_dma_dev_t *dev, uint32_t chan
  */
 static inline void ahb_dma_ll_rx_crc_set_init_value(ahb_dma_dev_t *dev, uint32_t channel, uint32_t value)
 {
-    dev->in_crc[channel].crc_init_data.in_crc_init_data_chn = value;
+    dev->in_crc_arb[channel].crc_init_data.in_crc_init_data_chn = value;
 }
 
 /**
@@ -596,7 +617,7 @@ static inline void ahb_dma_ll_rx_crc_set_init_value(ahb_dma_dev_t *dev, uint32_t
  */
 static inline uint32_t ahb_dma_ll_rx_crc_get_result(ahb_dma_dev_t *dev, uint32_t channel)
 {
-    return dev->in_crc[channel].crc_final_result.in_crc_final_result_chn;
+    return dev->in_crc_arb[channel].crc_final_result.in_crc_final_result_chn;
 }
 
 /**
@@ -604,24 +625,24 @@ static inline uint32_t ahb_dma_ll_rx_crc_get_result(ahb_dma_dev_t *dev, uint32_t
  */
 static inline void ahb_dma_ll_rx_crc_latch_config(ahb_dma_dev_t *dev, uint32_t channel)
 {
-    dev->in_crc[channel].crc_width.rx_crc_latch_flag_chn = 1;
-    dev->in_crc[channel].crc_width.rx_crc_latch_flag_chn = 0;
+    dev->in_crc_arb[channel].crc_width.rx_crc_latch_flag_chn = 1;
+    dev->in_crc_arb[channel].crc_width.rx_crc_latch_flag_chn = 0;
 }
 
 /**
  * @brief Set the lfsr and data mask that used by the Parallel CRC calculation formula for a given CRC bit, RX channel
  */
 static inline void ahb_dma_ll_rx_crc_set_lfsr_data_mask(ahb_dma_dev_t *dev, uint32_t channel, uint32_t crc_bit,
-        uint32_t lfsr_mask, uint32_t data_mask, bool reverse_data_mask)
+                                                        uint32_t lfsr_mask, uint32_t data_mask, bool reverse_data_mask)
 {
-    dev->in_crc[channel].crc_en_addr.rx_crc_en_addr_chn = crc_bit;
-    dev->in_crc[channel].crc_en_wr_data.rx_crc_en_wr_data_chn = lfsr_mask;
-    dev->in_crc[channel].crc_data_en_addr.rx_crc_data_en_addr_chn = crc_bit;
+    dev->in_crc_arb[channel].crc_en_addr.rx_crc_en_addr_chn = crc_bit;
+    dev->in_crc_arb[channel].crc_en_wr_data.rx_crc_en_wr_data_chn = lfsr_mask;
+    dev->in_crc_arb[channel].crc_data_en_addr.rx_crc_data_en_addr_chn = crc_bit;
     if (reverse_data_mask) {
         // "& 0xff" because the hardware only support 8-bit data
-        data_mask = _bitwise_reverse(data_mask & 0xFF);
+        data_mask = hal_utils_bitwise_reverse8(data_mask & 0xFF);
     }
-    HAL_FORCE_MODIFY_U32_REG_FIELD(dev->in_crc[channel].crc_data_en_wr_data, rx_crc_data_en_wr_data_chn, data_mask);
+    HAL_FORCE_MODIFY_U32_REG_FIELD(dev->in_crc_arb[channel].crc_data_en_wr_data, rx_crc_data_en_wr_data_chn, data_mask);
 }
 
 #ifdef __cplusplus

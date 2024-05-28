@@ -154,7 +154,6 @@ In both cases, the functions involve checking that the first 4 bytes of an alloc
 
 Different values usually indicate buffer underrun or overrun. Overrun indicates that when writing to memory, the data written exceeds the size of the allocated memory, resulting in writing to an unallocated memory area; underrun indicates that when reading memory, the data read exceeds the allocated memory and reads data from an unallocated memory area.
 
-
 Comprehensive
 +++++++++++++
 
@@ -217,7 +216,8 @@ Once you have identified the code which you think is leaking:
 - Enable the :ref:`CONFIG_HEAP_TRACING_DEST` option.
 - Call the function :cpp:func:`heap_trace_init_standalone` early in the program, to register a buffer that can be used to record the memory trace.
 - Call the function :cpp:func:`heap_trace_start` to begin recording all mallocs or frees in the system. Call this immediately before the piece of code which you suspect is leaking memory.
-- Call the function :cpp:func:`heap_trace_stop` to stop the trace once the suspect piece of code has finished executing.
+- Call the function :cpp:func:`heap_trace_stop` to stop the trace once the suspect piece of code has finished executing. This state will stop the tracing of both allocations and frees.
+- Call the function :cpp:func:`heap_trace_alloc_pause` to pause the tracing of new allocations while continuing to trace the frees. Call this immediately after the piece of code which you suspect is leaking memory to prevent any new allocations to be recorded.
 - Call the function :cpp:func:`heap_trace_dump` to dump the results of the heap trace.
 
 The following code snippet demonstrates how application code would typically initialize, start, and stop heap tracing:
@@ -280,7 +280,7 @@ The output from the heap trace has a similar format to the following example:
         total allocations 2 total frees 0
 
 .. note::
-    
+
     The above example output uses :doc:`IDF Monitor </api-guides/tools/idf-monitor>` to automatically decode PC addresses to their source files and line numbers.
 
 The first line indicates how many allocation entries are in the buffer, compared to its total size.
@@ -298,7 +298,7 @@ In ``HEAP_TRACE_LEAKS`` mode, for each traced memory allocation that has not alr
 
 .. only:: not CONFIG_IDF_TARGET_ARCH_RISCV
 
-    The depth of the call stack recorded for each trace entry can be configured in the project configuration menu, under ``Heap Memory Debugging`` > ``Enable heap tracing`` > ``Heap tracing stack depth``. Up to 10 stack frames can be recorded for each allocation (the default is 2). Each additional stack frame increases the memory usage of each ``heap_trace_record_t`` record by eight bytes.
+    The depth of the call stack recorded for each trace entry can be configured in the project configuration menu, under ``Heap Memory Debugging`` > ``Enable heap tracing`` > :ref:`CONFIG_HEAP_TRACING_STACK_DEPTH`. Up to 32 stack frames can be recorded for each allocation (the default is 2). Each additional stack frame increases the memory usage of each ``heap_trace_record_t`` record by eight bytes.
 
 Finally, the total number of the 'leaked' bytes (bytes allocated but not freed while the trace is running) is printed together with the total number of allocations it represents.
 

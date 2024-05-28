@@ -69,7 +69,7 @@ Linenoise 库不需要显式地初始化，但是在调用行编辑函数之前�
 
 - :cpp:func:`linenoiseSetCompletionCallback`
 
-  当用户按下制表键时， linenoise 会调用 **补全回调函数** ，该回调函数会检查当前已经输入的内容，然后调用 :cpp:func:`linenoiseAddCompletion` 函数来提供所有可能的补全后的命令列表。启用补全功能，需要事先调用 :cpp:func:`linenoiseSetCompletionCallback` 函数来注册补全回调函数。
+  当用户按下制表键时，linenoise 会调用 **补全回调函数** ，该回调函数会检查当前已经输入的内容，然后调用 :cpp:func:`linenoiseAddCompletion` 函数来提供所有可能的补全后的命令列表。启用补全功能，需要事先调用 :cpp:func:`linenoiseSetCompletionCallback` 函数来注册补全回调函数。
 
   ``console`` 组件提供了一个现成的函数来为注册的命令提供补全功能 :cpp:func:`esp_console_get_completion` （见下文）。
 
@@ -79,7 +79,7 @@ Linenoise 库不需要显式地初始化，但是在调用行编辑函数之前�
 
 - :cpp:func:`linenoiseSetHintsCallback`
 
-  每当用户的输入改变时， linenoise 就会调用此回调函数，检查到目前为止输入的命令行内容，然后提供带有提示信息的字符串（例如命令参数列表），然后会在同一行上用不同的颜色显示出该文本。
+  每当用户的输入改变时，linenoise 就会调用此回调函数，检查到目前为止输入的命令行内容，然后提供带有提示信息的字符串（例如命令参数列表），然后会在同一行上用不同的颜色显示出该文本。
 
 - :cpp:func:`linenoiseSetFreeHintsCallback`
 
@@ -147,7 +147,12 @@ Linenoise 库不需要显式地初始化，但是在调用行编辑函数之前�
 -  命令名字（不含空格的字符串）
 -  帮助文档，解释该命令的用途
 -  可选的提示文本，列出命令的参数。如果应用程序使用 ``Argtable3`` 库来解析参数，则可以通过提供指向 argtable 参数定义结构体的指针来自动生成提示文本
--  命令处理函数
+- 命令处理函数（无上下文），或
+- 命令处理函数（有上下文）。如要使用此函数，则必须在调用其他命令 **之前** 调用 :cpp:func:`esp_console_cmd_set_context` 初始化上下文。
+
+.. note::
+
+  使用接受上下文的命令处理函数或者不接受上下文的命令处理函数均可，但两者不能同时使用。如果使用接受上下文的命令处理程序函数，则必须调用 :cpp:func:`esp_console_cmd_set_context` 初始化上下文，否则该函数可能会访问未初始化的上下文。
 
 命令注册模块还提供了其它函数：
 

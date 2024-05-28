@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -7,6 +7,7 @@
 // The HAL layer for SDIO slave (common part)
 
 #include <string.h>
+#include <inttypes.h>
 #include "soc/slc_struct.h"
 #include "soc/hinf_struct.h"
 #include "hal/sdio_slave_types.h"
@@ -189,7 +190,7 @@ static esp_err_t init_send_queue(sdio_slave_context_t *hal)
     //loop in the ringbuf to link all the desc one after another as a ring
     for (int i = 0; i < hal->send_queue_size + 1; i++) {
         rcv_res = sdio_ringbuf_recv(buf, &last, NULL, RINGBUF_GET_ONE);
-        assert (rcv_res == ESP_OK);
+        HAL_ASSERT(rcv_res == ESP_OK);
 
         ret = sdio_ringbuf_send(buf, link_desc_to_last, last);
         if (ret != ESP_OK) return ret;
@@ -201,7 +202,7 @@ static esp_err_t init_send_queue(sdio_slave_context_t *hal)
     last = NULL;
     //clear the queue
     rcv_res = sdio_ringbuf_recv(buf, &first, &last, RINGBUF_GET_ALL);
-    assert (rcv_res == ESP_OK);
+    HAL_ASSERT(rcv_res == ESP_OK);
     HAL_ASSERT(first == last); //there should be only one desc remain
     sdio_ringbuf_return(buf, (uint8_t *) first);
     return ESP_OK;
@@ -318,11 +319,11 @@ static void send_new_packet(sdio_slave_context_t *hal)
 
     // update pkt_len register to allow host reading.
     sdio_slave_ll_send_write_len(hal->slc, end_desc->pkt_len);
-    HAL_EARLY_LOGV(TAG, "send_length_write: %d, last_len: %08X", end_desc->pkt_len, sdio_slave_ll_send_read_len(hal->host));
+    HAL_EARLY_LOGV(TAG, "send_length_write: %"PRIu32", last_len: %08"PRIX32"", end_desc->pkt_len, sdio_slave_ll_send_read_len(hal->host));
 
     send_set_state(hal, STATE_SENDING);
 
-    HAL_EARLY_LOGD(TAG, "restart new send: %p->%p, pkt_len: %d", start_desc, end_desc, end_desc->pkt_len);
+    HAL_EARLY_LOGD(TAG, "restart new send: %p->%p, pkt_len: %"PRIu32"", start_desc, end_desc, end_desc->pkt_len);
 }
 
 static esp_err_t send_check_new_packet(sdio_slave_context_t *hal)
@@ -633,7 +634,7 @@ void sdio_slave_hal_recv_flush_one_buffer(sdio_slave_context_t *hal)
 {
     sdio_slave_hal_recv_stailq_t *const queue = &hal->recv_link_list;
     sdio_slave_ll_desc_t *desc = STAILQ_FIRST(queue);
-    assert (desc != NULL && desc->owner == 0);
+    HAL_ASSERT(desc != NULL && desc->owner == 0);
     STAILQ_REMOVE_HEAD(queue, qe);
     desc->owner = 1;
     STAILQ_INSERT_TAIL(queue, desc, qe);
@@ -668,7 +669,7 @@ void sdio_slave_hal_load_buf(sdio_slave_context_t *hal, sdio_slave_ll_desc_t *de
 
 static inline void show_queue_item(sdio_slave_ll_desc_t *item)
 {
-    HAL_EARLY_LOGI(TAG, "=> %p: size: %d(%d), eof: %d, owner: %d", item, item->size, item->length, item->eof, item->owner);
+    HAL_EARLY_LOGI(TAG, "=> %p: size: %"PRIu32"(%"PRIu32"), eof: %"PRIu32", owner: %"PRIu32"", item, item->size, item->length, item->eof, item->owner);
     HAL_EARLY_LOGI(TAG, "   buf: %p, stqe_next: %p", item->buf, item->qe.stqe_next);
 }
 

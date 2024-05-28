@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2023-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -159,18 +159,18 @@
 #define UART4_SLP_CLK_PAD_IN_IDX                           78
 #define GPIO_SD6_OUT_IDX                                   78
 #define GPIO_SD7_OUT_IDX                                   79
-#define CAN0_RX_PAD_IN_IDX                                 80
-#define CAN0_TX_PAD_OUT_IDX                                80
-#define CAN0_BUS_OFF_ON_PAD_OUT_IDX                        81
-#define CAN0_CLKOUT_PAD_OUT_IDX                            82
-#define CAN1_RX_PAD_IN_IDX                                 83
-#define CAN1_TX_PAD_OUT_IDX                                83
-#define CAN1_BUS_OFF_ON_PAD_OUT_IDX                        84
-#define CAN1_CLKOUT_PAD_OUT_IDX                            85
-#define CAN2_RX_PAD_IN_IDX                                 86
-#define CAN2_TX_PAD_OUT_IDX                                86
-#define CAN2_BUS_OFF_ON_PAD_OUT_IDX                        87
-#define CAN2_CLKOUT_PAD_OUT_IDX                            88
+#define TWAI0_RX_PAD_IN_IDX                                 80
+#define TWAI0_TX_PAD_OUT_IDX                                80
+#define TWAI0_BUS_OFF_ON_PAD_OUT_IDX                        81
+#define TWAI0_CLKOUT_PAD_OUT_IDX                            82
+#define TWAI1_RX_PAD_IN_IDX                                 83
+#define TWAI1_TX_PAD_OUT_IDX                                83
+#define TWAI1_BUS_OFF_ON_PAD_OUT_IDX                        84
+#define TWAI1_CLKOUT_PAD_OUT_IDX                            85
+#define TWAI2_RX_PAD_IN_IDX                                 86
+#define TWAI2_TX_PAD_OUT_IDX                                86
+#define TWAI2_BUS_OFF_ON_PAD_OUT_IDX                        87
+#define TWAI2_CLKOUT_PAD_OUT_IDX                            88
 #define PWM0_SYNC0_PAD_IN_IDX                              89
 #define PWM0_CH0_A_PAD_OUT_IDX                             89
 #define PWM0_SYNC1_PAD_IN_IDX                              90
@@ -207,12 +207,12 @@
 #define TWAI0_STANDBY_PAD_OUT_IDX                          105
 #define PWM1_CAP2_PAD_IN_IDX                               106
 #define TWAI1_STANDBY_PAD_OUT_IDX                          106
-#define GMII_MDI_PAD_IN_IDX                                107
+#define MII_MDI_PAD_IN_IDX                                107
 #define TWAI2_STANDBY_PAD_OUT_IDX                          107
-#define GMAC_PHY_COL_PAD_IN_IDX                            108
-#define GMII_MDC_PAD_OUT_IDX                               108
-#define GMAC_PHY_CRS_PAD_IN_IDX                            109
-#define GMII_MDO_PAD_OUT_IDX                               109
+#define EMAC_PHY_COL_PAD_IN_IDX                            108
+#define MII_MDC_PAD_OUT_IDX                               108
+#define EMAC_PHY_CRS_PAD_IN_IDX                            109
+#define MII_MDO_PAD_OUT_IDX                               109
 #define USB_OTG11_IDDIG_PAD_IN_IDX                         110
 #define USB_SRP_DISCHRGVBUS_PAD_OUT_IDX                    110
 #define USB_OTG11_AVALID_PAD_IN_IDX                        111
@@ -339,21 +339,21 @@
 #define LCD_DATA_OUT_PAD_OUT22_IDX                         176
 #define CAM_DATA_IN_PAD_IN15_IDX                           177
 #define LCD_DATA_OUT_PAD_OUT23_IDX                         177
-#define GMAC_PHY_RXDV_PAD_IN_IDX                           178
-#define GMAC_PHY_TXEN_PAD_OUT_IDX                          178
-#define GMAC_PHY_RXD0_PAD_IN_IDX                           179
-#define GMAC_PHY_TXD0_PAD_OUT_IDX                          179
-#define GMAC_PHY_RXD1_PAD_IN_IDX                           180
-#define GMAC_PHY_TXD1_PAD_OUT_IDX                          180
-#define GMAC_PHY_RXD2_PAD_IN_IDX                           181
-#define GMAC_PHY_TXD2_PAD_OUT_IDX                          181
-#define GMAC_PHY_RXD3_PAD_IN_IDX                           182
-#define GMAC_PHY_TXD3_PAD_OUT_IDX                          182
-#define GMAC_PHY_RXER_PAD_IN_IDX                           183
-#define GMAC_PHY_TXER_PAD_OUT_IDX                          183
-#define GMAC_RX_CLK_PAD_IN_IDX                             184
+#define EMAC_PHY_RXDV_PAD_IN_IDX                           178
+#define EMAC_PHY_TXEN_PAD_OUT_IDX                          178
+#define EMAC_PHY_RXD0_PAD_IN_IDX                           179
+#define EMAC_PHY_TXD0_PAD_OUT_IDX                          179
+#define EMAC_PHY_RXD1_PAD_IN_IDX                           180
+#define EMAC_PHY_TXD1_PAD_OUT_IDX                          180
+#define EMAC_PHY_RXD2_PAD_IN_IDX                           181
+#define EMAC_PHY_TXD2_PAD_OUT_IDX                          181
+#define EMAC_PHY_RXD3_PAD_IN_IDX                           182
+#define EMAC_PHY_TXD3_PAD_OUT_IDX                          182
+#define EMAC_PHY_RXER_PAD_IN_IDX                           183
+#define EMAC_PHY_TXER_PAD_OUT_IDX                          183
+#define EMAC_RX_CLK_PAD_IN_IDX                             184
 #define DBG_CH0_CLK_IDX                                    184
-#define GMAC_TX_CLK_PAD_IN_IDX                             185
+#define EMAC_TX_CLK_PAD_IN_IDX                             185
 #define DBG_CH1_CLK_IDX                                    185
 #define PARLIO_RX_CLK_PAD_IN_IDX                           186
 #define PARLIO_RX_CLK_PAD_OUT_IDX                          186

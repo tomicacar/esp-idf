@@ -84,10 +84,21 @@ static void example_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const u
     example_espnow_event_t evt;
     example_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
     uint8_t * mac_addr = recv_info->src_addr;
+    uint8_t * des_addr = recv_info->des_addr;
 
     if (mac_addr == NULL || data == NULL || len <= 0) {
         ESP_LOGE(TAG, "Receive cb arg error");
         return;
+    }
+
+    if (IS_BROADCAST_ADDR(des_addr)) {
+        /* If added a peer with encryption before, the receive packets may be
+         * encrypted as peer-to-peer message or unencrypted over the broadcast channel.
+         * Users can check the destination address to distinguish it.
+         */
+        ESP_LOGD(TAG, "Receive broadcast ESPNOW data");
+    } else {
+        ESP_LOGD(TAG, "Receive unicast ESPNOW data");
     }
 
     evt.id = EXAMPLE_ESPNOW_RECV_CB;
@@ -106,7 +117,7 @@ static void example_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const u
 }
 
 /* Parse received ESPNOW data. */
-int example_espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, uint16_t *seq, int *magic)
+int example_espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, uint16_t *seq, uint32_t *magic)
 {
     example_espnow_data_t *buf = (example_espnow_data_t *)data;
     uint16_t crc, crc_cal = 0;
@@ -152,7 +163,7 @@ static void example_espnow_task(void *pvParameter)
     example_espnow_event_t evt;
     uint8_t recv_state = 0;
     uint16_t recv_seq = 0;
-    int recv_magic = 0;
+    uint32_t recv_magic = 0;
     bool is_broadcast = false;
     int ret;
 

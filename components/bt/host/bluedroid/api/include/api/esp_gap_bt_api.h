@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -91,7 +91,39 @@ typedef struct {
 
 typedef uint8_t esp_bt_eir_type_t;
 
+/* ACL Packet Types */
+#define ESP_BT_ACL_PKT_TYPES_MASK_DM1           0x0008
+#define ESP_BT_ACL_PKT_TYPES_MASK_DH1           0x0010
+#define ESP_BT_ACL_PKT_TYPES_MASK_DM3           0x0400
+#define ESP_BT_ACL_PKT_TYPES_MASK_DH3           0x0800
+#define ESP_BT_ACL_PKT_TYPES_MASK_DM5           0x4000
+#define ESP_BT_ACL_PKT_TYPES_MASK_DH5           0x8000
+#define ESP_BT_ACL_PKT_TYPES_MASK_NO_2_DH1      0x0002
+#define ESP_BT_ACL_PKT_TYPES_MASK_NO_3_DH1      0x0004
+#define ESP_BT_ACL_PKT_TYPES_MASK_NO_2_DH3      0x0100
+#define ESP_BT_ACL_PKT_TYPES_MASK_NO_3_DH3      0x0200
+#define ESP_BT_ACL_PKT_TYPES_MASK_NO_2_DH5      0x1000
+#define ESP_BT_ACL_PKT_TYPES_MASK_NO_3_DH5      0x2000
 
+// DM1 can not be disabled. All options are mandatory to include DM1.
+#define ESP_BT_ACL_DM1_ONLY     (ESP_BT_ACL_PKT_TYPES_MASK_DM1 | 0x330e)         /* 0x330e */
+#define ESP_BT_ACL_DH1_ONLY     (ESP_BT_ACL_PKT_TYPES_MASK_DH1 | 0x330e)         /* 0x331e */
+#define ESP_BT_ACL_DM3_ONLY     (ESP_BT_ACL_PKT_TYPES_MASK_DM3 | 0x330e)         /* 0x370e */
+#define ESP_BT_ACL_DH3_ONLY     (ESP_BT_ACL_PKT_TYPES_MASK_DH3 | 0x330e)         /* 0x3b0e */
+#define ESP_BT_ACL_DM5_ONLY     (ESP_BT_ACL_PKT_TYPES_MASK_DM5 | 0x330e)         /* 0x730e */
+#define ESP_BT_ACL_DH5_ONLY     (ESP_BT_ACL_PKT_TYPES_MASK_DH5 | 0x330e)         /* 0xb30e */
+#define ESP_BT_ACL_2_DH1_ONLY   (~ESP_BT_ACL_PKT_TYPES_MASK_NO_2_DH1 & 0x330e)   /* 0x330c */
+#define ESP_BT_ACL_3_DH1_ONLY   (~ESP_BT_ACL_PKT_TYPES_MASK_NO_3_DH1 & 0x330e)   /* 0x330a */
+#define ESP_BT_ACL_2_DH3_ONLY   (~ESP_BT_ACL_PKT_TYPES_MASK_NO_2_DH3 & 0x330e)   /* 0x320e */
+#define ESP_BT_ACL_3_DH3_ONLY   (~ESP_BT_ACL_PKT_TYPES_MASK_NO_3_DH3 & 0x330e)   /* 0x310e */
+#define ESP_BT_ACL_2_DH5_ONLY   (~ESP_BT_ACL_PKT_TYPES_MASK_NO_2_DH5 & 0x330e)   /* 0x230e */
+#define ESP_BT_ACL_3_DH5_ONLY   (~ESP_BT_ACL_PKT_TYPES_MASK_NO_3_DH5 & 0x330e)   /* 0x130e */
+
+typedef uint16_t esp_bt_acl_pkt_type_t;
+
+/* Range of encryption key size */
+#define ESP_BT_ENC_KEY_SIZE_CTRL_MAX            (16)
+#define ESP_BT_ENC_KEY_SIZE_CTRL_MIN            (7)
 
 /* ESP_BT_EIR_FLAG bit definition */
 #define ESP_BT_EIR_FLAG_LIMIT_DISC         (0x01 << 0)
@@ -114,7 +146,7 @@ typedef struct {
     uint8_t                 *p_url;                 /*!< URL point */
 } esp_bt_eir_data_t;
 
-/// Major service class field of Class of Device, mutiple bits can be set
+/// Major service class field of Class of Device, multiple bits can be set
 typedef enum {
     ESP_BT_COD_SRVC_NONE                     =     0,    /*!< None indicates an invalid value */
     ESP_BT_COD_SRVC_LMTD_DISCOVER            =   0x1,    /*!< Limited Discoverable Mode */
@@ -198,6 +230,22 @@ typedef enum {
     ESP_BT_GAP_DISCOVERY_STARTED,                   /*!< Device discovery started */
 } esp_bt_gap_discovery_state_t;
 
+/// Type of link key
+#define ESP_BT_LINK_KEY_COMB                (0x00)  /*!< Combination Key */
+#define ESP_BT_LINK_KEY_DBG_COMB            (0x03)  /*!< Debug Combination Key */
+#define ESP_BT_LINK_KEY_UNAUTHED_COMB_P192  (0x04)  /*!< Unauthenticated Combination Key generated from P-192 */
+#define ESP_BT_LINK_KEY_AUTHED_COMB_P192    (0x05)  /*!< Authenticated Combination Key generated from P-192 */
+#define ESP_BT_LINK_KEY_CHG_COMB            (0x06)  /*!< Changed Combination Key */
+#define ESP_BT_LINK_KEY_UNAUTHED_COMB_P256  (0x07)  /*!< Unauthenticated Combination Key generated from P-256 */
+#define ESP_BT_LINK_KEY_AUTHED_COMB_P256    (0x08)  /*!< Authenticated Combination Key generated from P-256 */
+typedef uint8_t esp_bt_link_key_type_t;
+
+/// Type of encryption
+#define ESP_BT_ENC_MODE_OFF                 (0x00)  /*!< Link Level Encryption is OFF */
+#define ESP_BT_ENC_MODE_E0                  (0x01)  /*!< Link Level Encryption is ON with E0 */
+#define ESP_BT_ENC_MODE_AES                 (0x02)  /*!< Link Level Encryption is ON with AES-CCM */
+typedef uint8_t esp_bt_enc_mode_t;
+
 /// BT GAP callback events
 typedef enum {
     ESP_BT_GAP_DISC_RES_EVT = 0,                    /*!< Device discovery result event */
@@ -220,6 +268,10 @@ typedef enum {
     ESP_BT_GAP_ACL_DISCONN_CMPL_STAT_EVT,           /*!< ACL disconnection complete status event */
     ESP_BT_GAP_SET_PAGE_TO_EVT,                     /*!< Set page timeout event */
     ESP_BT_GAP_GET_PAGE_TO_EVT,                     /*!< Get page timeout event */
+    ESP_BT_GAP_ACL_PKT_TYPE_CHANGED_EVT,            /*!< Set ACL packet types event */
+    ESP_BT_GAP_ENC_CHG_EVT,                         /*!< Encryption change event */
+    ESP_BT_GAP_SET_MIN_ENC_KEY_SIZE_EVT,            /*!< Set minimum encryption key size */
+    ESP_BT_GAP_GET_DEV_NAME_CMPL_EVT,               /*!< Get device name complete event */
     ESP_BT_GAP_EVT_MAX,
 } esp_bt_gap_cb_event_t;
 
@@ -232,6 +284,11 @@ typedef enum {
 /** Minimum and Maximum inquiry length*/
 #define ESP_BT_GAP_MIN_INQ_LEN                (0x01)  /*!< Minimum inquiry duration, unit is 1.28s */
 #define ESP_BT_GAP_MAX_INQ_LEN                (0x30)  /*!< Maximum inquiry duration, unit is 1.28s */
+
+/** Minimum, Default and Maximum poll interval **/
+#define ESP_BT_GAP_TPOLL_MIN                  (0x0006) /*!< Minimum poll interval, unit is 625 microseconds */
+#define ESP_BT_GAP_TPOLL_DFT                  (0x0028) /*!< Default poll interval, unit is 625 microseconds */
+#define ESP_BT_GAP_TPOLL_MAX                  (0x1000) /*!< Maximum poll interval, unit is 625 microseconds */
 
 /// GAP state callback parameters
 typedef union {
@@ -297,8 +354,17 @@ typedef union {
     struct auth_cmpl_param {
         esp_bd_addr_t bda;                     /*!< remote bluetooth device address*/
         esp_bt_status_t stat;                  /*!< authentication complete status */
+        esp_bt_link_key_type_t lk_type;        /*!< type of link key generated */
         uint8_t device_name[ESP_BT_GAP_MAX_BDNAME_LEN + 1]; /*!< device name */
     } auth_cmpl;                               /*!< authentication complete parameter struct */
+
+    /**
+     * @brief ESP_BT_GAP_ENC_CHG_EVT
+     */
+    struct enc_chg_param {
+        esp_bd_addr_t bda;                     /*!< remote bluetooth device address*/
+        esp_bt_enc_mode_t enc_mode;            /*!< encryption mode */
+    } enc_chg;                                 /*!< encryption change parameter struct */
 
     /**
      * @brief ESP_BT_GAP_PIN_REQ_EVT
@@ -390,6 +456,22 @@ typedef union {
     } get_page_timeout;                         /*!< get page timeout parameter struct */
 
     /**
+     * @brief ESP_BT_GAP_ACL_PKT_TYPE_CHANGED_EVT
+     */
+    struct set_acl_pkt_types_param {
+        esp_bt_status_t status;                 /*!< set ACL packet types status */
+        esp_bd_addr_t bda;                      /*!< remote bluetooth device address */
+        uint16_t pkt_types;                     /*!< packet types successfully set */
+    } set_acl_pkt_types;                        /*!< set ACL packet types parameter struct */
+
+    /**
+     * @brief ESP_BT_GAP_SET_MIN_ENC_KEY_SIZE_EVT
+     */
+    struct set_min_enc_key_size_param {
+        esp_bt_status_t status;                 /*!< set minimum encryption key size status */
+    } set_min_enc_key_size;                     /*!< set minimum encryption key size parameter struct */
+
+    /**
      * @brief ESP_BT_GAP_ACL_CONN_CMPL_STAT_EVT
      */
     struct acl_conn_cmpl_stat_param {
@@ -406,6 +488,14 @@ typedef union {
         uint16_t handle;                       /*!< ACL connection handle */
         esp_bd_addr_t bda;                     /*!< remote bluetooth device address */
     } acl_disconn_cmpl_stat;                   /*!< ACL disconnection complete status parameter struct */
+
+    /**
+     * @brief ESP_GAP_BT_GET_DEV_NAME_CMPL_EVT
+     */
+    struct get_dev_name_cmpl_evt_param {
+        esp_bt_status_t status;                /*!< Indicate the get device name success status */
+        char *name;                            /*!< Name of bluetooth device */
+    } get_dev_name_cmpl;                       /*!< Get device name complete status parameter struct */
 } esp_bt_gap_cb_param_t;
 
 /**
@@ -472,7 +562,7 @@ static inline uint32_t esp_bt_gap_get_cod_format_type(uint32_t cod)
  *
  * @return
  *                  - true if cod is valid
- *                  - false otherise
+ *                  - false otherwise
  */
 static inline bool esp_bt_gap_is_valid_cod(uint32_t cod)
 {
@@ -828,6 +918,46 @@ esp_err_t esp_bt_gap_set_page_timeout(uint16_t page_to);
  *                  - other: failed
  */
 esp_err_t esp_bt_gap_get_page_timeout(void);
+
+/**
+ * @brief           Set ACL packet types
+ *                  An ESP_BT_GAP_SET_ACL_PPKT_TYPES_EVT event will reported to
+ *                  the APP layer.
+ *
+ * @return          - ESP_OK: success
+ *                  - ESP_ERR_INVALID_STATE: if bluetooth stack is not yet enabled
+ *                  - other: failed
+ */
+esp_err_t esp_bt_gap_set_acl_pkt_types(esp_bd_addr_t remote_bda, esp_bt_acl_pkt_type_t pkt_types);
+
+/**
+ * @brief           Set the minimal size of encryption key
+ *
+ * @return          - ESP_OK: success
+ *                  - ESP_ERR_INVALID_STATE: if bluetooth stack is not yet enabled
+ *                  - other: failed
+ */
+esp_err_t esp_bt_gap_set_min_enc_key_size(uint8_t key_size);
+
+/**
+ * @brief           Set device name to the local device
+ *
+ * @param[in]       name - device name.
+ *
+ * @return
+ *                  - ESP_OK : success
+ *                  - other  : failed
+ */
+esp_err_t esp_bt_gap_set_device_name(const char *name);
+
+/**
+ * @brief           Get device name of the local device
+ *
+ * @return
+ *                  - ESP_OK : success
+ *                  - other  : failed
+ */
+esp_err_t esp_bt_gap_get_device_name(void);
 
 #ifdef __cplusplus
 }

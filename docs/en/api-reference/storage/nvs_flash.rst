@@ -35,12 +35,9 @@ NVS operates on key-value pairs. Keys are ASCII strings; the maximum key length 
 
 Additional types, such as ``float`` and ``double`` might be added later.
 
-Keys are required to be unique. Assigning a new value to an existing key works as follows:
+Keys are required to be unique. Assigning a new value to an existing key replaces the old value and data type with the value and data type specified by a write operation.
 
--  If the new value is of the same type as the old one, value is updated.
--  If the new value has a different data type, an error is returned.
-
-Data type check is also performed when reading a value. An error is returned if the data type of the read operation does not match the data type of the value.
+A data type check is performed when reading a value. An error is returned if the data type expected by read operation does not match the data type of entry found for the key provided.
 
 
 Namespaces
@@ -61,7 +58,7 @@ There are the following functions available:
 
 In general, all iterators obtained via :cpp:func:`nvs_entry_find` have to be released using :cpp:func:`nvs_release_iterator`, which also tolerates ``NULL`` iterators.
 
-:cpp:func:`nvs_entry_find` and :cpp:func:`nvs_entry_next` set the given iterator to ``NULL`` or a valid iterator in all cases except a parameter error occured (i.e., return ``ESP_ERR_NVS_NOT_FOUND``). In case of a parameter error, the given iterator will not be modified. Hence, it is best practice to initialize the iterator to ``NULL`` before calling :cpp:func:`nvs_entry_find` to avoid complicated error checking before releasing the iterator.
+:cpp:func:`nvs_entry_find` and :cpp:func:`nvs_entry_next` set the given iterator to ``NULL`` or a valid iterator in all cases except a parameter error occurred (i.e., return ``ESP_ERR_NVS_NOT_FOUND``). In case of a parameter error, the given iterator will not be modified. Hence, it is best practice to initialize the iterator to ``NULL`` before calling :cpp:func:`nvs_entry_find` to avoid complicated error checking before releasing the iterator.
 
 
 Security, Tampering, and Robustness
@@ -104,7 +101,7 @@ Instead of calling the ``nvs_partition_gen.py`` tool manually, the creation of t
     * - Parameter
       - Description
     * - ``partition``
-      - Name of the NVS parition
+      - Name of the NVS partition
     * - ``csv``
       - Path to CSV file to parse
 
@@ -117,12 +114,12 @@ Instead of calling the ``nvs_partition_gen.py`` tool manually, the creation of t
    * - Parameter
      - Description
    * - ``FLASH_IN_PROJECT``
-     - Name of the NVS parition
+     - Name of the NVS partition
    * - ``DEPENDS``
      - Specify files on which the command depends
 
 
-If ``FLASH_IN_PROJECT`` is not specified, the image will still be generated, but you will have to flash it manually using ``idf.py <partition>-flash`` (e.g., if your parition name is ``nvs``, then use ``idf.py nvs-flash``).
+If ``FLASH_IN_PROJECT`` is not specified, the image will still be generated, but you will have to flash it manually using ``idf.py <partition>-flash`` (e.g., if your partition name is ``nvs``, then use ``idf.py nvs-flash``).
 
 ``nvs_create_partition_image`` must be called from one of the component ``CMakeLists.txt`` files. Currently, only non-encrypted partitions are supported.
 

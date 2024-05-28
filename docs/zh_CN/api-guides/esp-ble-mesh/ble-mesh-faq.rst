@@ -338,7 +338,7 @@ ESP-BLE-MESH 常见问题手册
 
     - Provisioner 调用 API :cpp:func:`esp_ble_mesh_provisioner_bind_app_key_to_local_model` 以绑定应用密钥至自己的客户端模型。
 
-1.24 Provisoner 如何控制节点的服务器模型？
+1.24 Provisioner 如何控制节点的服务器模型？
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     ESP-BLE-MESH 支持所有 SIG 定义的客户端模型。Provisioner 可以使用这些客户端模型控制节点的服务器模型。客户端模型分为 6 类，每类有相应的功能。
@@ -568,7 +568,7 @@ ESP-BLE-MESH 常见问题手册
 
     此 **count** 值提供给 App 配置的代理节点，以决定何时提前开始 Proxy 广播信息。
 
-4.5 运行以下示例 :example:`fast_prov_server <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_server>` 的节点的 Configuration Client Model 何时开始工作？
+4.5 运行以下示例 :example:`fast_prov_server <bluetooth/esp_ble_mesh/fast_provisioning/fast_prov_server>` 的节点的 Configuration Client Model 何时开始工作？
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     使能了 Temporary Provisioner 功能后，Configuration Client Model 会开始工作。

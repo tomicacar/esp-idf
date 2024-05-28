@@ -27,9 +27,15 @@ Enabling power management features comes at the cost of increased interrupt late
 
 Dynamic frequency scaling (DFS) and automatic Light-sleep can be enabled in an application by calling the function :cpp:func:`esp_pm_configure`. Its argument is a structure defining the frequency scaling settings, :cpp:class:`esp_pm_config_t`. In this structure, three fields need to be initialized:
 
-- ``max_freq_mhz``: Maximum CPU frequency in MHz, i.e., the frequency used when the ``ESP_PM_CPU_FREQ_MAX`` lock is acquired. This field is usually set to the default CPU frequency.
-- ``min_freq_mhz``: Minimum CPU frequency in MHz, i.e., the frequency used when only the ``ESP_PM_APB_FREQ_MAX`` lock is acquired. This field can be set to the XTAL frequency value, or the XTAL frequency divided by an integer. Note that 10 MHz is the lowest frequency at which the default REF_TICK clock of 1 MHz can be generated.
-- ``light_sleep_enable``: Whether the system should automatically enter Light-sleep when no locks are acquired (``true``/``false``).
+.. list::
+
+    - ``max_freq_mhz``: Maximum CPU frequency in MHz, i.e., the frequency used when the ``ESP_PM_CPU_FREQ_MAX`` lock is acquired. This field is usually set to the default CPU frequency.
+
+    :esp32 or esp32s2: - ``min_freq_mhz``: Minimum CPU frequency in MHz, indicating the frequency used when not holding the power management lock. Note that 10 MHz is the minimum frequency required for generating a 1 MHz REF_TICK default clock.
+
+    :not esp32 and not esp32s2: - ``min_freq_mhz``: Minimum CPU frequency in MHz, indicating the frequency used when not holding the power management lock.
+
+    - ``light_sleep_enable``: Whether the system should automatically enter Light-sleep when no locks are acquired (``true``/``false``).
 
 
   Alternatively, if you enable the option :ref:`CONFIG_PM_DFS_INIT_AUTO` in menuconfig, the maximum CPU frequency will be determined by the :ref:`CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ` setting, and the minimum CPU frequency will be locked to the XTAL frequency.
@@ -92,13 +98,7 @@ Dynamic Frequency Scaling and Peripheral Drivers
 
 When DFS is enabled, the APB frequency can be changed multiple times within a single RTOS tick. The APB frequency change does not affect the operation of some peripherals, while other peripherals may have issues. For example, Timer Group peripheral timers keeps counting, however, the speed at which they count changes proportionally to the APB frequency.
 
-The following peripherals work normally even when the APB frequency is changing:
-
-- **UART**: if ``REF_TICK`` or XTAL is used as a clock source. See :cpp:member:`uart_config_t::source_clk`.
-- **LEDC**: if ``REF_TICK`` is used as a clock source. See :cpp:func:`ledc_timer_config` function.
-- **RMT**: if ``REF_TICK`` or XTAL is used as a clock source. See :cpp:member:`rmt_config_t::flags` and macro `RMT_CHANNEL_FLAGS_AWARE_DFS`.
-- **GPTimer**: if APB is used as the clock source. See :cpp:member:`gptimer_config_t::clk_src`.
-- **TSENS**: if XTAL or ``RTC_8M`` is used as a clock source. So, APB frequency changing will not influence it.
+Peripheral clock sources such as ``REF_TICK``, ``XTAL``, ``RC_FAST`` (i.e., ``RTC_8M``), their frequencies will not be inflenced by APB frequency. And therefore, to ensure the peripheral behaves consistently during DFS, it is recommended to select one of these clocks as the peripheral clock source. For more specific guidelines, please refer to the "Power Management" section of each peripheral's "API Reference > Peripherals API" page.
 
 Currently, the following peripheral drivers are aware of DFS and use the ``ESP_PM_APB_FREQ_MAX`` lock for the duration of the transaction:
 
@@ -112,6 +112,7 @@ The following drivers hold the ``ESP_PM_APB_FREQ_MAX`` lock while the driver is 
 .. list::
 
     - **SPI slave**: between calls to :cpp:func:`spi_slave_initialize` and :cpp:func:`spi_slave_free`.
+    - **GPTimer**: between calls to :cpp:func:`gptimer_enable` and :cpp:func:`gptimer_disable`.
     - **Ethernet**: between calls to :cpp:func:`esp_eth_driver_install` and :cpp:func:`esp_eth_driver_uninstall`.
     - **WiFi**: between calls to :cpp:func:`esp_wifi_start` and :cpp:func:`esp_wifi_stop`. If modem sleep is enabled, the lock will be released for the periods of time when radio is disabled.
     :SOC_TWAI_SUPPORTED: - **TWAI**: between calls to :cpp:func:`twai_driver_install` and :cpp:func:`twai_driver_uninstall` (only when the clock source is set to :cpp:enumerator:`TWAI_CLK_SRC_APB`).
@@ -145,23 +146,21 @@ Light-sleep Peripheral Power Down
     - TIMG0
     - SPI0/1
     - SYSTIMER
+    - RMT
 
     The following peripherals are not yet supported:
-    - GDMA
     - ETM
     - TIMG1
     - ASSIST_DEBUG
     - Trace
     - Crypto: AES/ECC/HMAC/RSA/SHA/DS/XTA_AES/ECDSA
     - SPI2
-    - I2C
     - I2S
     - PCNT
     - USB-Serial-JTAG
     - TWAI
     - LEDC
     - MCPWM
-    - RMT
     - SARADC
     - SDIO
     - PARL_IO
@@ -169,9 +168,12 @@ Light-sleep Peripheral Power Down
 
     For peripherals that do not support Light-sleep context retention, if the Power management is enabled, the ``ESP_PM_NO_LIGHT_SLEEP`` lock should be held when the peripheral is working to avoid losing the working context of the peripheral when entering sleep.
 
+    .. note::
+
+        When the peripheral power domain is powered down during sleep, both the IO_MUX and GPIO modules are inactive, meaning the chip pins' state is not maintained by these modules. To preserve the state of an IO during sleep, it's essential to call :cpp:func:`gpio_hold_dis` and :cpp:func:`gpio_hold_en` before and after configuring the GPIO state. This action ensures that the IO configuration is latched and prevents the IO from becoming floating while in sleep mode.
+
 
 API Reference
 -------------
 
 .. include-build-file:: inc/esp_pm.inc
-

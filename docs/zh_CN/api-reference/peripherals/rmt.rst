@@ -92,7 +92,8 @@ RMT 接收器可以对输入信号采样，将其转换为 RMT 数据格式，�
 - :cpp:member:`rmt_tx_channel_config_t::with_dma` 为通道启用 DMA 后端。启用 DMA 后端可以释放 CPU 上的大部分通道工作负载，显著减轻 CPU 负担。但并非所有 ESP 芯片都支持 DMA 后端，在启用此选项前，请参阅 [`TRM <{IDF_TARGET_TRM_EN_URL}#rmt>`__]。若所选芯片不支持 DMA 后端，可能会报告 :c:macro:`ESP_ERR_NOT_SUPPORTED` 错误。
 - :cpp:member:`rmt_tx_channel_config_t::io_loop_back` 启用通道所分配的 GPIO 上的输入和输出功能，将发送通道和接收通道绑定到同一个 GPIO 上，从而实现回环功能。
 - :cpp:member:`rmt_tx_channel_config_t::io_od_mode` 配置通道分配的 GPIO 为开漏模式 (open-drain)。当与 :cpp:member:`rmt_tx_channel_config_t::io_loop_back` 结合使用时，可以实现双向总线，如 1-wire。
-- :cpp:member:`rmt_tx_channel_config_t::intr_priority` 设置中断的优先级。如果设置为 ``0`` ，驱动将会使用一个中低优先级的中断（优先级可能为1，2或3），否则会使用 :cpp:member:`rmt_tx_channel_config_t::intr_priority` 指定的优先级。请使用优先级序号（1，2，3），而不是bitmask的形式（(1<<1)，(1<<2)，(1<<3)）。请注意，中断优先级一旦设置，在 :cpp:func:`rmt_del_channel` 被调用之前不可再次修改。
+- :cpp:member:`rmt_tx_channel_config_t::intr_priority` 设置中断的优先级。如果设置为 ``0`` ，驱动将会使用一个中低优先级的中断（优先级可能为 1，2 或 3），否则会使用 :cpp:member:`rmt_tx_channel_config_t::intr_priority` 指定的优先级。请使用优先级序号 (1, 2, 3)，而不是 bitmask 的形式（(1<<1)，(1<<2)，(1<<3)）。请注意，中断优先级一旦设置，在 :cpp:func:`rmt_del_channel` 被调用之前不可再次修改。
+- :cpp:member:`rmt_tx_channel_config_t::backup_before_sleep` 用于使能在进入睡眠模式前备份 RMT 寄存器。这个选项需要用户在功耗和内存使用之间做取舍。如果功耗不是一个问题，可以禁用这个选项来节省内存。但如果想要节省功耗，应该使能这个选项，在进入睡眠模式前保存 RMT 寄存器，并在唤醒后恢复它们。这个功能依赖于特定的硬件模块，如果你在不支持的芯片上启用这个标志，你会得到一个错误信息，如 ``register back up is not supported``。
 
 将必要参数填充到结构体 :cpp:type:`rmt_tx_channel_config_t` 后，可以调用 :cpp:func:`rmt_new_tx_channel` 来分配和初始化 TX 通道。如果函数运行正确，会返回 RMT 通道句柄；如果 RMT 资源池内缺少空闲通道，会返回 :c:macro:`ESP_ERR_NOT_FOUND` 错误；如果硬件不支持 DMA 后端等部分功能，则返回 :c:macro:`ESP_ERR_NOT_SUPPORTED` 错误。
 
@@ -126,7 +127,8 @@ RMT 接收器可以对输入信号采样，将其转换为 RMT 数据格式，�
 - :cpp:member:`rmt_rx_channel_config_t::invert_in` 在输入信号传递到 RMT 接收器前对其进行反转。该反转由 GPIO 交换矩阵完成，而非 RMT 外设。
 - :cpp:member:`rmt_rx_channel_config_t::with_dma` 为通道启用 DMA 后端。启用 DMA 后端可以释放 CPU 上的大部分通道工作负载，显著减轻 CPU 负担。但并非所有 ESP 芯片都支持 DMA 后端，在启用此选项前，请参阅 [`TRM <{IDF_TARGET_TRM_EN_URL}#rmt>`__]。若所选芯片不支持 DMA 后端，可能会报告 :c:macro:`ESP_ERR_NOT_SUPPORTED` 错误。
 - :cpp:member:`rmt_rx_channel_config_t::io_loop_back` 启用通道所分配的 GPIO 上的输入和输出功能，将发送通道和接收通道绑定到同一个 GPIO 上，从而实现回环功能。
-- :cpp:member:`rmt_rx_channel_config_t::intr_priority` 设置中断的优先级。如果设置为 ``0`` ，驱动将会使用一个中低优先级的中断（优先级可能为1，2或3），否则会使用 :cpp:member:`rmt_rx_channel_config_t::intr_priority` 指定的优先级。请使用优先级序号（1，2，3），而不是bitmask的形式（(1<<1)，(1<<2)，(1<<3)）。请注意，中断优先级一旦设置，在 :cpp:func:`rmt_del_channel` 被调用之前不可再次修改。
+- :cpp:member:`rmt_rx_channel_config_t::intr_priority` 设置中断的优先级。如果设置为 ``0`` ，驱动将会使用一个中低优先级的中断（优先级可能为 1，2 或 3），否则会使用 :cpp:member:`rmt_rx_channel_config_t::intr_priority` 指定的优先级。请使用优先级序号 (1，2，3)，而不是 bitmask 的形式（(1<<1)，(1<<2)，(1<<3)）。请注意，中断优先级一旦设置，在 :cpp:func:`rmt_del_channel` 被调用之前不可再次修改。
+- :cpp:member:`rmt_rx_channel_config_t::backup_before_sleep` 用于使能在进入睡眠模式前备份 RMT 寄存器。这个选项需要用户在功耗和内存使用之间取得平衡。如果功耗不是一个问题，可以禁用这个选项来节省内存。但如果想要节省功耗，应该使能这个选项，在进入睡眠模式前保存 RMT 寄存器，并在唤醒后恢复它们。这个功能依赖于特定的硬件模块，如果你在不支持的芯片上启用这个标志，你会得到一个错误信息，如 ``register back up is not supported``。
 
 将必要参数填充到结构体 :cpp:type:`rmt_rx_channel_config_t` 后，可以调用 :cpp:func:`rmt_new_rx_channel` 来分配和初始化 RX 通道。如果函数运行正确，会返回 RMT 通道句柄；如果 RMT 资源池内缺少空闲通道，会返回 :c:macro:`ESP_ERR_NOT_FOUND` 错误；如果硬件不支持 DMA 后端等部分功能，则返回 :c:macro:`ESP_ERR_NOT_SUPPORTED` 错误。
 
@@ -146,7 +148,7 @@ RMT 接收器可以对输入信号采样，将其转换为 RMT 数据格式，�
 .. note::
 
     由于 GPIO 驱动程序中的软件限制，当 TX 和 RX 通道都绑定到同一 GPIO 时，请确保在 TX 通道之前初始化 RX 通道。如果先设置 TX 通道，那么在 RX 通道设置期间，GPIO 控制信号将覆盖先前的 RMT TX 通道信号。
-    
+
 卸载 RMT 通道
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -205,6 +207,10 @@ RMT 发射器可以生成载波信号，并将其调制到消息信号上。载�
 
 也可使用参数 ``user_data``，在 :cpp:func:`rmt_tx_register_event_callbacks` 和 :cpp:func:`rmt_rx_register_event_callbacks` 中保存自定义上下文。用户数据将直接传递给每个回调函数。
 
+.. note::
+
+    "receive-done" 不等同于 "receive-finished". 这个回调函数也可以在 "partial-receive-done" 时间发生的时候被调用。
+
 在回调函数中可以获取驱动程序在 ``edata`` 中填充的特定事件数据。注意，``edata`` 指针仅在回调的持续时间内有效。
 
 有关 TX 完成事件数据的定义，请参阅 :cpp:type:`rmt_tx_done_event_data_t`：
@@ -213,8 +219,9 @@ RMT 发射器可以生成载波信号，并将其调制到消息信号上。载�
 
 有关 RX 完成事件数据的定义，请参阅 :cpp:type:`rmt_rx_done_event_data_t`：
 
-- :cpp:member:`rmt_rx_done_event_data_t::received_symbols` 指向接收到的 RMT 符号，这些符号存储在 :cpp:func:`rmt_receive` 函数的 ``buffer`` 参数中，在回调函数返回前不应释放此接收缓冲区。
+- :cpp:member:`rmt_rx_done_event_data_t::received_symbols` 指向接收到的 RMT 符号，这些符号存储在 :cpp:func:`rmt_receive` 函数的 ``buffer`` 参数中，在回调函数返回前不应释放此接收缓冲区。如果你还启用了部分接收的功能，则这个用户缓冲区会被用作“二级缓冲区”，其中的内容可以被随后传入的数据覆盖。在这种情况下，如果你想要保存或者稍后处理一些数据，则需要将接收到的数据复制到其他位置。
 - :cpp:member:`rmt_rx_done_event_data_t::num_symbols` 表示接收到的 RMT 符号数量，该值不会超过 :cpp:func:`rmt_receive` 函数的 ``buffer_size`` 参数。如果 ``buffer_size`` 不足以容纳所有接收到的 RMT 符号，驱动程序将只保存缓冲区能够容纳的最大数量的符号，并丢弃或忽略多余的符号。
+- :cpp:member:`rmt_rx_done_event_data_t::is_last` 指示收到的数据包是否是当前的接收任务中的最后一个。这个标志在你使能 :cpp:member:`rmt_receive_config_t::extra_flags::en_partial_rx` 部分接收功能时非常有用。
 
 .. _rmt-enable-and-disable-channel:
 
@@ -249,6 +256,7 @@ RMT 是一种特殊的通信外设，无法像 SPI 和 I2C 那样发送原始字
         注意，不是所有 ESP 芯片都支持 **循环发送** 功能，在配置此选项前，请参阅 [`TRM <{IDF_TARGET_TRM_EN_URL}#rmt>`__]。若所选芯片不支持配置此选项，可能会报告 :c:macro:`ESP_ERR_NOT_SUPPORTED` 错误。
 
 - :cpp:member:`rmt_transmit_config_t::eot_level` 设置发射器完成工作时的输出电平，该设置同时适用于调用 :cpp:func:`rmt_disable` 停止发射器工作时的输出电平。
+- :cpp:member:`rmt_transmit_config_t::queue_nonblocking` 设置当传输队列满的时候该函数是否需要等待。如果该值设置为 ``true`` 那么当遇到队列满的时候，该函数会立即返回错误代码 :c:macro:`ESP_ERR_INVALID_STATE`。否则，函数会阻塞当前线程，直到传输队列有空档。
 
 .. note::
 
@@ -257,7 +265,7 @@ RMT 是一种特殊的通信外设，无法像 SPI 和 I2C 那样发送原始字
     - 增加 :cpp:member:`rmt_tx_channel_config_t::mem_block_symbols`。若此时启用了 DMA 后端，该方法将失效。
     - 自定义编码器，并在编码函数中构造一个无限循环，详情请参阅 :ref:`rmt-rmt-encoder`。
 
-:cpp:func:`rmt_transmit` 会在其内部构建一个事务描述符，并将其发送到作业队列中，该队列将在 ISR 中调度。因此，在 :cpp:func:`rmt_transmit` 返回时，事务可能尚未启动。为确保完成所有挂起的事务，请调用 :cpp:func:`rmt_tx_wait_all_done`。
+:cpp:func:`rmt_transmit` 会在其内部构建一个事务描述符，并将其发送到作业队列中，该队列通常会在 ISR 上下文中被调度。因此，在 :cpp:func:`rmt_transmit` 返回时，该事务可能尚未启动。注意，你不能在事务结束前就去回收或者修改 payload 中的内容。通过 :cpp:func:`rmt_tx_register_event_callbacks` 来注册事件回调，可以在事务完成的时候被通知。为确保完成所有挂起的事务，你还可以调用 :cpp:func:`rmt_tx_wait_all_done`。
 
 .. _rmt-multiple-channels-simultaneous-transmission:
 
@@ -325,6 +333,7 @@ RMT 是一种特殊的通信外设，无法像 SPI 和 I2C 那样发送原始字
 
 - :cpp:member:`rmt_receive_config_t::signal_range_min_ns` 指定高电平或低电平有效脉冲的最小持续时间。如果脉冲宽度小于指定值，硬件会将其视作干扰信号并忽略。
 - :cpp:member:`rmt_receive_config_t::signal_range_max_ns` 指定高电平或低电平有效脉冲的最大持续时间。如果脉冲宽度大于指定值，接收器会将其视作 **停止信号**，并立即生成接收完成事件。
+- 如果传入的数据包很长，无法一次性保存在用户缓冲区中，可以通过将 :cpp:member:`rmt_receive_config_t::extra_flags::en_partial_rx` 设置为 ``true`` 来开启部分接收功能。在这种情况下，当用户缓冲区快满的时候，驱动会多次调用 :cpp:member:`rmt_rx_event_callbacks_t::on_recv_done` 回调函数来通知用户去处理已经收到的数据。你可以检查 :cpp:member::`rmt_rx_done_event_data_t::is_last` 的值来了解当前事务是否已经结束。请注意，并不是所有 ESP 系列芯片都支持这个功能，它依赖硬件提供的 “ping-pong 接收” 或者 “DMA 接收” 的能力。
 
 根据以上配置调用 :cpp:func:`rmt_receive` 后，RMT 接收器会启动 RX 机制。注意，以上配置均针对特定事务存在，也就是说，要开启新一轮的接收时，需要再次设置 :cpp:type:`rmt_receive_config_t` 选项。接收器会将传入信号以 :cpp:type:`rmt_symbol_word_t` 的格式保存在内部内存块或 DMA 缓冲区中。
 
@@ -336,7 +345,7 @@ RMT 是一种特殊的通信外设，无法像 SPI 和 I2C 那样发送原始字
 
     由于内存块大小有限，RMT 接收器只能保存长度不超过内存块容量的短帧。硬件会将长帧截断，并由驱动程序报错：``hw buffer too small, received symbols truncated``。
 
-应在 :cpp:func:`rmt_receive` 函数的 ``buffer`` 参数中提供复制目标。如果由于缓冲区大小不足而导致缓冲区溢出，接收器仍可继续工作，但会丢弃溢出的符号，并报告此错误信息：``user buffer too small, received symbols truncated``。请注意 ``buffer`` 参数的生命周期，确保在接收器完成或停止工作前不会回收缓冲区。
+应在 :cpp:func:`rmt_receive` 函数的 ``buffer`` 参数中提供复制目标。如果由于缓冲区大小不足而导致缓冲区溢出，接收器仍可继续工作，但会丢弃溢出的符号，并报告此错误信息： ``user buffer too small, received symbols truncated``。请注意 ``buffer`` 参数的生命周期，确保在接收器完成或停止工作前不会回收缓冲区。
 
 当接收器完成工作，即接收到持续时间大于 :cpp:member:`rmt_receive_config_t::signal_range_max_ns` 的信号时，驱动程序将停止接收器。如有需要，应再次调用 :cpp:func:`rmt_receive` 重新启动接收器。在 :cpp:member:`rmt_rx_event_callbacks_t::on_recv_done` 的回调中可以获取接收到的数据。要获取更多有关详情，请参阅 :ref:`rmt-register-event-callbacks`。
 
@@ -420,6 +429,18 @@ RMT 编码器是 RMT TX 事务的一部分，用于在特定时间生成正确�
 .. blockdiag:: /../_static/diagrams/rmt/rmt_encoder_chain.diag
     :caption: RMT 编码器链
     :align: center
+
+简易回调编码器
+~~~~~~~~~~~~~~
+
+简易回调编码器通过调用 :cpp:func:`rmt_new_simple_encoder` 创建。简易回调编码器允许用户提供一个回调函数，该函数从用户空间读取数据并将 RMT 符号写入输出流，无需链式组合其他编码器。回调函数会接收到传递给 :cpp:func:`rmt_transmit` 的数据指针、回调函数在此次传输中已写入的符号数量计数器、编码后的 RMT 符号指针以及空闲空间大小。如果空间不足以编码数据，回调函数可以返回 0，此时 RMT 驱动将等待先前的符号传输完成，然后再次调用回调函数，此时应该会有更多的空间可用。如果回调函数成功编码 RMT 符号，应返回已编码的符号数量。
+
+在调用 :cpp:func:`rmt_new_simple_encoder` 前，应预先提供配置结构体 :cpp:type:`rmt_simple_encoder_config_t`，具体配置如下：
+
+- :cpp:member:`rmt_simple_encoder_config_t::callback` 和 :cpp:member:`rmt_simple_encoder_config_t::arg` 为必选项，分别用于提供回调函数和传递给回调函数的不透明参数。
+- :cpp:member:`rmt_simple_encoder_config_t::min_chunk_size` 指定了编码器始终能够写入一些数据的最小空闲空间，以符号为单位。换句话说，当传递给编码器的空闲空间达到这个数量时，它不应该返回 0（除非编码器已经完成了符号的编码）。
+
+简易回调编码器的功能通常可以通过链式组合其他编码器来实现，但相比编码器链，简易回调编码器更易于理解和维护。
 
 自定义 NEC 协议的 RMT 编码器
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -530,11 +551,13 @@ RMT 编码器是 RMT TX 事务的一部分，用于在特定时间生成正确�
 电源管理
 ^^^^^^^^^^^^^^^^
 
-通过 :ref:`CONFIG_PM_ENABLE` 选项启用电源管理时，系统会在进入 Light-sleep 模式前调整 APB 频率。该操作可能改变 RMT 内部计数器的分辨率。
+当电源管理 :ref:`CONFIG_PM_ENABLE` 被启用的时候，系统在进入睡眠前可能会调整或禁用时钟源。结果是，RMT 内部的时间基准无法按预期工作。
 
-然而，驱动程序可以通过获取 :cpp:enumerator:`ESP_PM_APB_FREQ_MAX` 类型的电源管理锁，防止系统改变 APB 频率。每当驱动创建以 :cpp:enumerator:`RMT_CLK_SRC_APB` 作为时钟源的 RMT 通道时，都会在通过 :cpp:func:`rmt_enable` 启用通道后获取电源管理锁。反之，调用 :cpp:func:`rmt_disable` 时，驱动程序释放锁。这也意味着 :cpp:func:`rmt_enable` 和 :cpp:func:`rmt_disable` 应成对出现。
+驱动程序可以通过创建一个电源管理锁来防止上述问题。锁的类型会根据不同的时钟源来设置。驱动程序将在 :cpp:func:`rmt_enable` 中拿锁，并在 :cpp:func:`rmt_disable` 中释放锁。这意味着，无论电源管理策略如何，在这两个函数之间的任何 RMT 事务都可以保证正常工作。在此期间，时钟源不会被禁用或调整频率。
 
-如果将通道时钟源设置为其他选项，如 :cpp:enumerator:`RMT_CLK_SRC_XTAL`，则驱动程序不会为其安装电源管理锁。对于低功耗应用程序来说，只要时钟源仍然可以提供足够的分辨率，不安装电源管理锁更为合适。
+.. only:: SOC_RMT_SUPPORT_SLEEP_RETENTION
+
+    除了时钟源的潜在变化外，当启用电源管理时，系统还可以关闭 RMT 寄存器所在的电源域。为确保 RMT 驱动程序在睡眠后继续工作，用户要么选择将 RMT 相关的寄存器备份到 RAM 中，要么拒绝关闭电源域。你可以根据应用需求在 :cpp:member:`rmt_tx_channel_config_t::backup_before_sleep` 和 :cpp:member:`rmt_rx_channel_config_t::backup_before_sleep` 中设置是否需要启用寄存器备份，在功耗和内存使用之间做权衡。
 
 .. _rmt-iram-safe:
 
@@ -551,6 +574,8 @@ IRAM 安全
 
 启用该选项可以保证 cache 禁用时的中断运行，但会相应增加 IRAM 占用。
 
+另外一个 Kconfig 选项 :ref:`CONFIG_RMT_RECV_FUNC_IN_IRAM` 可以将 :cpp:func:`rmt_receive` 函数放进内部的 IRAM 中，从而当 flash cache 被关闭的时候，这个函数也能够被使用。
+
 .. _rmt-thread-safety:
 
 线程安全
@@ -559,6 +584,10 @@ IRAM 安全
 RMT 驱动程序会确保工厂函数 :cpp:func:`rmt_new_tx_channel`、:cpp:func:`rmt_new_rx_channel` 和 :cpp:func:`rmt_new_sync_manager` 的线程安全。使用时，可以直接从不同的 RTOS 任务中调用此类函数，无需额外锁保护。
 其他以 :cpp:type:`rmt_channel_handle_t` 和 :cpp:type:`rmt_sync_manager_handle_t` 作为第一个位置参数的函数均非线程安全，在没有设置互斥锁保护的任务中，应避免从多个任务中调用这类函数。
 
+以下函数允许在 ISR 上下文中使用：
+
+- :cpp:func:`rmt_receive`
+
 .. _rmt-kconfig-options:
 
 Kconfig 选项
@@ -566,6 +595,7 @@ Kconfig 选项
 
 - :ref:`CONFIG_RMT_ISR_IRAM_SAFE` 控制默认 ISR 处理程序能否在禁用 cache 的情况下工作。详情请参阅 :ref:`rmt-iram-safe`。
 - :ref:`CONFIG_RMT_ENABLE_DEBUG_LOG` 用于启用调试日志输出，启用此选项将增加固件的二进制文件大小。
+- :ref:`CONFIG_RMT_RECV_FUNC_IN_IRAM` 用于控制 RMT 接收函数被链接到系统存储的哪个位置（IRAM 还是 Flash）。详情请参阅 :ref:`rmt-iram-safe`。
 
 应用示例
 --------------------
@@ -580,13 +610,14 @@ Kconfig 选项
 FAQ
 ---
 
-* RMT 编码器为什么会产生比预期更多的数据？
+* RMT 为什么会发送比预期更多的数据？
 
-RMT 编码在 ISR 上下文中发生。如果 RMT 编码会话耗时较长（例如，记录调试信息），或者由于中断延迟导致编码会话延迟执行，则传输速率可能会超过编码速率。此时，编码器无法及时准备下一组数据，致使传输器再次发送先前的数据。由于传输器无法停止并等待，可以通过以下方法来缓解此问题：
+    RMT 的传输层编码是在 ISR 上下文中完成的，如果 RMT 编码耗时较长（例如，增加了过多的调试追踪信息），或者由于中断延迟和抢占导致编码工作被推迟执行，导致传输器在编码器更新内存数据之前就读取了老数据，致使传输器再次发送先前的数据。我们无法告诉硬件传输器自动等待新数据的更新，但是可以通过以下方法来缓解此问题：
 
-    - 增加 :cpp:member:`rmt_tx_channel_config_t::mem_block_symbols` 的值，步长为 {IDF_TARGET_SOC_RMT_MEM_WORDS_PER_CHANNEL}。
-    - 将编码函数放置在 IRAM 中。
-    - 如果所用芯片支持 :cpp:member:`rmt_tx_channel_config_t::with_dma`，请启用该选项。
+        - 增加 :cpp:member:`rmt_tx_channel_config_t::mem_block_symbols` 的值，步长为 {IDF_TARGET_SOC_RMT_MEM_WORDS_PER_CHANNEL}。
+        - 将编码函数放置在 IRAM 中。
+        - 如果所用芯片支持 :cpp:member:`rmt_tx_channel_config_t::with_dma`，请启用该选项。
+        - 将RMT驱动安装在另外一个CPU核上，避免和其他高中断频率的外设竞争同一个CPU资源。
 
 API 参考
 -------------
@@ -595,7 +626,7 @@ API 参考
 .. include-build-file:: inc/rmt_rx.inc
 .. include-build-file:: inc/rmt_common.inc
 .. include-build-file:: inc/rmt_encoder.inc
-.. include-build-file:: inc/components/driver/rmt/include/driver/rmt_types.inc
+.. include-build-file:: inc/components/esp_driver_rmt/include/driver/rmt_types.inc
 .. include-build-file:: inc/components/hal/include/hal/rmt_types.inc
 
 

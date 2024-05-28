@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -8,7 +8,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-
+#include <stddef.h>
 #include "soc/soc.h"
 #include "soc/lp_aon_reg.h"
 #include "soc/reset_reasons.h"
@@ -55,16 +55,16 @@ extern "C" {
   *************************************************************************************
   */
 
-#define RTC_SLOW_CLK_CAL_REG    LP_AON_STORE1_REG
-#define RTC_BOOT_TIME_LOW_REG   LP_AON_STORE2_REG
-#define RTC_BOOT_TIME_HIGH_REG  LP_AON_STORE3_REG
-#define RTC_XTAL_FREQ_REG       LP_AON_STORE4_REG
-#define RTC_APB_FREQ_REG        LP_AON_STORE5_REG
-#define RTC_ENTRY_ADDR_REG      LP_AON_STORE6_REG
-#define RTC_RESET_CAUSE_REG     LP_AON_STORE6_REG
-#define RTC_MEMORY_CRC_REG      LP_AON_STORE7_REG
-#define LIGHT_SLEEP_WAKE_STUB_ADDR_REG  LP_AON_STORE8_REG
-#define SLEEP_MODE_REG          LP_AON_STORE9_REG
+#define RTC_SLOW_CLK_CAL_REG          LP_AON_STORE1_REG
+#define RTC_BOOT_TIME_LOW_REG         LP_AON_STORE2_REG
+#define RTC_BOOT_TIME_HIGH_REG        LP_AON_STORE3_REG
+#define RTC_XTAL_FREQ_REG             LP_AON_STORE4_REG
+#define RTC_APB_FREQ_REG              LP_AON_STORE5_REG
+#define RTC_ENTRY_ADDR_REG            LP_AON_STORE6_REG
+#define RTC_RESET_CAUSE_REG           LP_AON_STORE6_REG
+#define RTC_MEMORY_CRC_REG            LP_AON_STORE7_REG
+#define RTC_SLEEP_WAKE_STUB_ADDR_REG  LP_AON_STORE8_REG
+#define RTC_SLEEP_MODE_REG            LP_AON_STORE9_REG
 
 #define RTC_DISABLE_ROM_LOG ((1 << 0) | (1 << 16)) //!< Disable logging from the ROM code.
 
@@ -82,7 +82,6 @@ typedef enum {
     TG0WDT_SYS_RESET       =  7,    /**<7, Timer Group0 Watch dog reset digital core*/
     TG1WDT_SYS_RESET       =  8,    /**<8, Timer Group1 Watch dog reset digital core*/
     RTCWDT_SYS_RESET       =  9,    /**<9, RTC Watch dog Reset digital core*/
-    INTRUSION_RESET        = 10,    /**<10, Instrusion tested to reset CPU*/
     TG0WDT_CPU_RESET       = 11,    /**<11, Time Group0 reset CPU*/
     RTC_SW_CPU_RESET       = 12,    /**<12, Software reset CPU*/
     RTCWDT_CPU_RESET       = 13,    /**<13, RTC Watch dog Reset CPU*/
@@ -90,11 +89,11 @@ typedef enum {
     RTCWDT_RTC_RESET       = 16,    /**<16, RTC Watch dog reset digital core and rtc module*/
     TG1WDT_CPU_RESET       = 17,    /**<17, Time Group1 reset CPU*/
     SUPER_WDT_RESET        = 18,    /**<18, super watchdog reset digital core and rtc module*/
-    GLITCH_RTC_RESET       = 19,    /**<19, glitch reset digital core and rtc module*/
     EFUSE_RESET            = 20,    /**<20, efuse reset digital core*/
     USB_UART_CHIP_RESET    = 21,    /**<21, usb uart reset digital core */
     USB_JTAG_CHIP_RESET    = 22,    /**<22, usb jtag reset digital core */
     POWER_GLITCH_RESET     = 23,    /**<23, power glitch reset digital core and rtc module*/
+    JTAG_CPU_RESET         = 24,    /**<24, jtag reset CPU*/
 } RESET_REASON;
 
 // Check if the reset reason defined in ROM is compatible with soc/reset_reasons.h
@@ -111,7 +110,6 @@ ESP_STATIC_ASSERT((soc_reset_reason_t)RTCWDT_BROWN_OUT_RESET == RESET_REASON_SYS
 ESP_STATIC_ASSERT((soc_reset_reason_t)RTCWDT_RTC_RESET == RESET_REASON_SYS_RTC_WDT, "RTCWDT_RTC_RESET != RESET_REASON_SYS_RTC_WDT");
 ESP_STATIC_ASSERT((soc_reset_reason_t)TG1WDT_CPU_RESET == RESET_REASON_CPU0_MWDT1, "TG1WDT_CPU_RESET != RESET_REASON_CPU0_MWDT1");
 ESP_STATIC_ASSERT((soc_reset_reason_t)SUPER_WDT_RESET == RESET_REASON_SYS_SUPER_WDT, "SUPER_WDT_RESET != RESET_REASON_SYS_SUPER_WDT");
-ESP_STATIC_ASSERT((soc_reset_reason_t)GLITCH_RTC_RESET == RESET_REASON_SYS_CLK_GLITCH, "GLITCH_RTC_RESET != RESET_REASON_SYS_CLK_GLITCH");
 ESP_STATIC_ASSERT((soc_reset_reason_t)EFUSE_RESET == RESET_REASON_CORE_EFUSE_CRC, "EFUSE_RESET != RESET_REASON_CORE_EFUSE_CRC");
 ESP_STATIC_ASSERT((soc_reset_reason_t)USB_UART_CHIP_RESET == RESET_REASON_CORE_USB_UART, "USB_UART_CHIP_RESET != RESET_REASON_CORE_USB_UART");
 ESP_STATIC_ASSERT((soc_reset_reason_t)USB_JTAG_CHIP_RESET == RESET_REASON_CORE_USB_JTAG, "USB_JTAG_CHIP_RESET != RESET_REASON_CORE_USB_JTAG");

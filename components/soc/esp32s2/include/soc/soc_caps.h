@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2020-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2020-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -31,9 +31,7 @@
  * If this file is changed the script will automatically run the script
  * and generate the kconfig variables as part of the pre-commit hooks.
  *
- * It can also be ran manually with `./tools/gen_soc_caps_kconfig/gen_soc_caps_kconfig.py 'components/soc/esp32s2/include/soc/'`
- *
- * For more information see `tools/gen_soc_caps_kconfig/README.md`
+ * It can also be run manually. For more information, see `${IDF_PATH}/tools/gen_soc_caps_kconfig/README.md`
  */
 
 #pragma once
@@ -51,6 +49,7 @@
 #define SOC_RISCV_COPROC_SUPPORTED      1
 #define SOC_USB_OTG_SUPPORTED           1
 #define SOC_PCNT_SUPPORTED              1
+#define SOC_PHY_SUPPORTED               1
 #define SOC_WIFI_SUPPORTED              1
 #define SOC_ULP_SUPPORTED               1
 #define SOC_CCOMP_TIMER_SUPPORTED       1
@@ -83,6 +82,14 @@
 #define SOC_TOUCH_SENSOR_SUPPORTED      1
 #define SOC_BOD_SUPPORTED               1
 #define SOC_CLK_TREE_SUPPORTED          1
+#define SOC_MPU_SUPPORTED               1
+#define SOC_WDT_SUPPORTED               1
+#define SOC_SPI_FLASH_SUPPORTED         1
+#define SOC_RNG_SUPPORTED               1
+#define SOC_LIGHT_SLEEP_SUPPORTED       1
+#define SOC_DEEP_SLEEP_SUPPORTED        1
+#define SOC_LP_PERIPH_SHARE_INTERRUPT   1   // LP peripherals sharing the same interrupt source
+#define SOC_PM_SUPPORTED                1
 
 /*-------------------------- XTAL CAPS ---------------------------------------*/
 #define SOC_XTAL_SUPPORT_40M            1
@@ -139,9 +146,9 @@
 #define SOC_CPU_CORES_NUM               (1U)
 #define SOC_CPU_INTR_NUM                32
 
-#define SOC_CPU_BREAKPOINTS_NUM         2
-#define SOC_CPU_WATCHPOINTS_NUM         2
-#define SOC_CPU_WATCHPOINT_SIZE         64 // bytes
+#define SOC_CPU_BREAKPOINTS_NUM             2
+#define SOC_CPU_WATCHPOINTS_NUM             2
+#define SOC_CPU_WATCHPOINT_MAX_REGION_SIZE  64 // bytes
 
 /*-------------------------- DAC CAPS ----------------------------------------*/
 #define SOC_DAC_CHAN_NUM      2
@@ -165,8 +172,16 @@
 // GPIO 46 is input only
 #define SOC_GPIO_VALID_OUTPUT_GPIO_MASK     (SOC_GPIO_VALID_GPIO_MASK & ~(0ULL | BIT46))
 
+#define SOC_GPIO_IN_RANGE_MAX           46
+#define SOC_GPIO_OUT_RANGE_MAX          45
+
 // digital I/O pad powered by VDD3P3_CPU or VDD_SPI(GPIO_NUM_26~GPIO_NUM_46)
 #define SOC_GPIO_VALID_DIGITAL_IO_PAD_MASK  0x00007FFFFC000000ULL
+
+// The Clock Out signal is binding to the pin's IO_MUX function
+#define SOC_GPIO_CLOCKOUT_BY_IO_MUX    (1)
+#define SOC_GPIO_CLOCKOUT_CHANNEL_NUM  (3)
+
 
 /*-------------------------- Dedicated GPIO CAPS ---------------------------------------*/
 #define SOC_DEDIC_GPIO_OUT_CHANNELS_NUM (8) /*!< 8 outward channels on each CPU core */
@@ -177,7 +192,8 @@
 
 /*-------------------------- I2C CAPS ----------------------------------------*/
 // ESP32-S2 has 2 I2C
-#define SOC_I2C_NUM            (2)
+#define SOC_I2C_NUM                 (2U)
+#define SOC_HP_I2C_NUM              (2U)
 
 #define SOC_I2C_FIFO_LEN       (32) /*!< I2C hardware FIFO depth */
 #define SOC_I2C_CMD_REG_NUM    (16) /*!< Number of I2C command registers */
@@ -244,7 +260,7 @@
 #define SOC_RMT_MEM_WORDS_PER_CHANNEL         64 /*!< Each channel owns 64 words memory (1 word = 4 Bytes) */
 #define SOC_RMT_SUPPORT_RX_DEMODULATION       1  /*!< Support signal demodulation on RX path (i.e. remove carrier) */
 #define SOC_RMT_SUPPORT_TX_ASYNC_STOP         1  /*!< Support stop transmission asynchronously */
-#define SOC_RMT_SUPPORT_TX_LOOP_COUNT         1  /*!< Support transmiting specified number of cycles in loop mode */
+#define SOC_RMT_SUPPORT_TX_LOOP_COUNT         1  /*!< Support transmitting specified number of cycles in loop mode */
 #define SOC_RMT_SUPPORT_TX_SYNCHRO            1  /*!< Support coordinate a group of TX channels to start simultaneously */
 #define SOC_RMT_SUPPORT_TX_CARRIER_DATA_ONLY  1  /*!< TX carrier can be modulated to data phase only */
 #define SOC_RMT_SUPPORT_REF_TICK              1  /*!< Support set REF_TICK as the RMT clock source */
@@ -291,9 +307,15 @@
 // Only SPI1 supports this feature
 #define SOC_SPI_PERIPH_SUPPORT_CONTROL_DUMMY_OUT             1
 
-#define SOC_MEMSPI_IS_INDEPENDENT 1
-#define SOC_SPI_SUPPORT_OCT 1
+#define SOC_SPI_SUPPORT_OCT                       1
 
+#define SOC_SPI_SCT_SUPPORTED                     1
+#define SOC_SPI_SCT_SUPPORTED_PERIPH(PERIPH_NUM)  (((PERIPH_NUM==1) || (PERIPH_NUM==2)) ? 1 : 0)    //Support Segmented-Configure-Transfer
+#define SOC_SPI_SCT_REG_NUM                       27
+#define SOC_SPI_SCT_BUFFER_NUM_MAX                (1 + SOC_SPI_SCT_REG_NUM)  //1-word-bitmap + 27-word-regs
+#define SOC_SPI_SCT_CONF_BITLEN_MAX               0x7FFFFD    //23 bit wide reg
+
+#define SOC_MEMSPI_IS_INDEPENDENT                 1
 #define SOC_MEMSPI_SRC_FREQ_80M_SUPPORTED         1
 #define SOC_MEMSPI_SRC_FREQ_40M_SUPPORTED         1
 #define SOC_MEMSPI_SRC_FREQ_26M_SUPPORTED         1
@@ -314,12 +336,11 @@
 #define SOC_TIMER_GROUP_TOTAL_TIMERS      (4)
 
 /*-------------------------- TOUCH SENSOR CAPS -------------------------------*/
-#define SOC_TOUCH_VERSION_2                 (1)     /*!<Hardware version of touch sensor */
+#define SOC_TOUCH_SENSOR_VERSION            (2)     /*!<Hardware version of touch sensor */
 #define SOC_TOUCH_SENSOR_NUM                (15)    /*!<15 Touch channels */
 #define SOC_TOUCH_PROXIMITY_CHANNEL_NUM     (3)     /*!<Support touch proximity channel number. */
 
-#define SOC_TOUCH_PAD_THRESHOLD_MAX         (0x1FFFFF)  /*!<If set touch threshold max value, The touch sensor can't be in touched status */
-#define SOC_TOUCH_PAD_MEASURE_WAIT_MAX      (0xFF)  /*!<The timer frequency is 8Mhz, the max value is 0xff */
+#define SOC_TOUCH_SAMPLER_NUM               (1U)    /*!< The sampler number in total, each sampler can be used to sample on one frequency */
 
 /*-------------------------- TWAI CAPS ---------------------------------------*/
 #define SOC_TWAI_CONTROLLER_NUM         1UL
@@ -343,8 +364,7 @@
 #define SOC_SPIRAM_XIP_SUPPORTED      1
 
 /*-------------------------- USB CAPS ----------------------------------------*/
-#define SOC_USB_PERIPH_NUM 1
-
+#define SOC_USB_OTG_PERIPH_NUM          (1U)
 
 /*--------------------------- SHA CAPS ---------------------------------------*/
 /* Max amount of bytes in a single DMA operation is 4095,
@@ -446,11 +466,6 @@
 
 /*-------------------------- CLOCK SUBSYSTEM CAPS ----------------------------------------*/
 #define SOC_CLK_APLL_SUPPORTED                    (1)
-// apll_multiplier_out = xtal_freq * (4 + sdm2 + sdm1/256 + sdm0/65536)
-#define SOC_APLL_MULTIPLIER_OUT_MIN_HZ (350000000) // 350 MHz
-#define SOC_APLL_MULTIPLIER_OUT_MAX_HZ (500000000) // 500 MHz
-#define SOC_APLL_MIN_HZ    (5303031)   // 5.303031 MHz, refer to 'periph_rtc_apll_freq_set' for the calculation
-#define SOC_APLL_MAX_HZ    (125000000) // 125MHz, refer to 'periph_rtc_apll_freq_set' for the calculation
 
 #define SOC_CLK_RC_FAST_D256_SUPPORTED            (1)
 #define SOC_RTC_SLOW_CLK_SUPPORT_RC_FAST_D256     (1)
@@ -480,3 +495,6 @@
 #define SOC_WIFI_NAN_SUPPORT                (1)    /*!< Support WIFI Aware (NAN) */
 /*-------------------------- ULP CAPS ----------------------------------------*/
 #define SOC_ULP_HAS_ADC                     (1)    /* ADC can be accessed from ULP */
+
+/*------------------------------------- PHY CAPS -------------------------------------*/
+#define SOC_PHY_COMBO_MODULE                  (0) /*!< Only support Wi-Fi*/

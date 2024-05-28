@@ -45,9 +45,10 @@ extern "C" {
 #define ESP_INTR_FLAG_LOWMED    (ESP_INTR_FLAG_LEVEL1|ESP_INTR_FLAG_LEVEL2|ESP_INTR_FLAG_LEVEL3) ///< Low and medium prio interrupts. These can be handled in C.
 #define ESP_INTR_FLAG_HIGH      (ESP_INTR_FLAG_LEVEL4|ESP_INTR_FLAG_LEVEL5|ESP_INTR_FLAG_LEVEL6|ESP_INTR_FLAG_NMI) ///< High level interrupts. Need to be handled in assembly.
 
+/** Mask for all level flags */
 #define ESP_INTR_FLAG_LEVELMASK (ESP_INTR_FLAG_LEVEL1|ESP_INTR_FLAG_LEVEL2|ESP_INTR_FLAG_LEVEL3| \
                                  ESP_INTR_FLAG_LEVEL4|ESP_INTR_FLAG_LEVEL5|ESP_INTR_FLAG_LEVEL6| \
-                                 ESP_INTR_FLAG_NMI) ///< Mask for all level flags
+                                 ESP_INTR_FLAG_NMI)
 
 
 /** @addtogroup Intr_Alloc_Pseudo_Src
@@ -298,6 +299,15 @@ void esp_intr_disable_source(int inum);
 static inline int esp_intr_flags_to_level(int flags)
 {
     return __builtin_ffs((flags & ESP_INTR_FLAG_LEVELMASK) >> 1);
+}
+
+/**
+ * @brief Get the interrupt flags from the supplied level (priority)
+ * @param level The interrupt priority level
+ */
+static inline int esp_intr_level_to_flags(int level)
+{
+    return (level > 0) ? (1 << level) & ESP_INTR_FLAG_LEVELMASK : 0;
 }
 
 /**

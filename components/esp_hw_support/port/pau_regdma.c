@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,7 +11,7 @@
 #include "esp_attr.h"
 #include "esp_log.h"
 #include "soc/soc.h"
-#include "soc/pcr_reg.h"
+#include "soc/soc_caps.h"
 #include "esp_private/esp_pau.h"
 #include "esp_private/periph_ctrl.h"
 
@@ -31,7 +31,10 @@ pau_context_t * __attribute__((weak)) IRAM_ATTR PAU_instance(void)
 
     if (pau_hal.dev == NULL) {
         pau_hal.dev = &PAU;
-        periph_module_enable(PERIPH_REGDMA_MODULE);
+        pau_hal_enable_bus_clock(true);
+#if SOC_PAU_IN_TOP_DOMAIN
+        pau_hal_lp_sys_initialize();
+#endif
     }
 
     return &pau_context;
@@ -62,7 +65,7 @@ void pau_regdma_trigger_modem_link_restore(void)
 }
 #endif
 
-#if SOC_PM_RETENTION_HAS_REGDMA_POWER_BUG
+#if SOC_PM_RETENTION_SW_TRIGGER_REGDMA
 void IRAM_ATTR pau_regdma_set_system_link_addr(void *link_addr)
 {
     /* ESP32H2 use software to trigger REGDMA to restore instead of PMU,
@@ -88,18 +91,18 @@ void IRAM_ATTR pau_regdma_trigger_system_link_restore(void)
 }
 #endif
 
-void pau_regdma_set_extra_link_addr(void *link_addr)
+void IRAM_ATTR pau_regdma_set_extra_link_addr(void *link_addr)
 {
     pau_hal_set_regdma_extra_link_addr(PAU_instance()->hal, link_addr);
 }
 
-void pau_regdma_trigger_extra_link_backup(void)
+void IRAM_ATTR pau_regdma_trigger_extra_link_backup(void)
 {
     pau_hal_start_regdma_extra_link(PAU_instance()->hal, true);
     pau_hal_stop_regdma_extra_link(PAU_instance()->hal);
 }
 
-void pau_regdma_trigger_extra_link_restore(void)
+void IRAM_ATTR pau_regdma_trigger_extra_link_restore(void)
 {
     pau_hal_start_regdma_extra_link(PAU_instance()->hal, false);
     pau_hal_stop_regdma_extra_link(PAU_instance()->hal);

@@ -6,7 +6,7 @@ ESP32-DevKitM-1
 
 This user guide will help you get started with ESP32-DevKitM-1 and will also provide more in-depth information.
 
-ESP32-DevKitM-1 is an ESP32-MINI-1(1U)-based development board produced by Espressif. Most of the I/O pins are broken out to the pin headers on both sides for easy interfacing. Users can either connect peripherals with jumper wires or mount ESP32-DevKitM-1 on a breadboard.
+ESP32-DevKitM-1 is an ESP32-MINI-1/1U-based development board produced by Espressif. Most of the I/O pins are broken out to the pin headers on both sides for easy interfacing. Users can either connect peripherals with jumper wires or mount ESP32-DevKitM-1 on a breadboard.
 
 
 +---------------------------+-------------------------------+
@@ -24,7 +24,7 @@ The document consists of the following major sections:
 
 - `Getting started`_: Provides an overview of the ESP32-DevKitM-1 and hardware/software setup instructions to get started.
 - `Hardware reference`_: Provides more detailed information about the ESP32-DevKitM-1's hardware.
-- `Related Documents`_: Gives links to related documentaiton.
+- `Related Documents`_: Gives links to related documentation.
 
 
 Getting Started

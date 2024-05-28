@@ -2,7 +2,7 @@
 #
 # The FreeRTOS component mainly contains
 # - Different FreeRTOS kernel implementations (namely IDF FreeRTOS and Amazon SMP FreeRTOS).
-# - Different ports of each architecture for each kernel implementaiton.
+# - Different ports of each architecture for each kernel implementation.
 # - IDF additions to FreeRTOS (e.g., features and API) to augment FreeRTOS
 #
 # The FreeRTOS component organizes its files as follows
@@ -12,7 +12,7 @@
 # - `./esp_additions`
 #       - Additional features added by ESP-IDF to augment FreeRTOS, and not part of the original kernel
 # - `./FreeRTOS-Kernel-...`
-#       - Different FreeRTOS kernel implementations. Each implementaiton is kept in its own directory.
+#       - Different FreeRTOS kernel implementations. Each implementation is kept in its own directory.
 #       - Ports for the implementation are kept in `FreeRTOS-Kernel-.../portable/xxx/`\
 # - `./test_apps`
 #       - Contains all unit tests/test apps for the FreeRTOS component.
@@ -31,11 +31,7 @@ idf_build_get_property(target IDF_TARGET)
 if(CONFIG_FREERTOS_SMP)
     set(kernel_impl "FreeRTOS-Kernel-SMP")
 else()
-    if(CONFIG_FREERTOS_USE_KERNEL_10_5_1)
-        message(FATAL_ERROR "FreeRTOS v10.5.1 is not buildable yet. Still under development")
-    else()
-        set(kernel_impl "FreeRTOS-Kernel")
-    endif()
+    set(kernel_impl "FreeRTOS-Kernel")
 endif()
 
 if(CONFIG_IDF_TARGET_ARCH_XTENSA)
@@ -71,7 +67,6 @@ list(APPEND srcs
     "${kernel_impl}/queue.c"
     "${kernel_impl}/tasks.c"
     "${kernel_impl}/timers.c"
-    "${kernel_impl}/croutine.c"
     "${kernel_impl}/event_groups.c"
     "${kernel_impl}/stream_buffer.c")
 
@@ -104,11 +99,10 @@ list(APPEND srcs
 
 if(arch STREQUAL "linux")
     # Check if we need to address the FreeRTOS EINTR coexistence with linux system calls if we're building without
-    # lwIP, we need to use linux system select which will receive EINTR event on every FreeRTOS interrupt, we
+    # lwIP enabled, we need to use linux system select which will receive EINTR event on every FreeRTOS interrupt, we
     # workaround this problem by wrapping select() to bypass and silence the EINTR events
     set(BYPASS_EINTR_ISSUE 0)
-    idf_build_get_property(build_components BUILD_COMPONENTS)
-    if(NOT "lwip" IN_LIST build_components)
+    if(NOT CONFIG_LWIP_ENABLE)
         set(BYPASS_EINTR_ISSUE 1)
         list(APPEND srcs "esp_additions/FreeRTOSSimulator_wrappers.c")
     endif()
@@ -187,8 +181,16 @@ if(arch STREQUAL "linux")
     target_compile_definitions(${COMPONENT_LIB} PUBLIC "projCOVERAGE_TEST=0")
     target_link_libraries(${COMPONENT_LIB} PUBLIC pthread)
     if(BYPASS_EINTR_ISSUE)
-        target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=select")
+        target_link_libraries(${COMPONENT_LIB} PRIVATE dl)
     endif()
+
+    # Disable strict prototype warnings in upstream code
+    # (struct event * event_create() is missing 'void')
+    set_source_files_properties(
+        "${kernel_impl}/portable/${arch}/utils/wait_for_event.c"
+        PROPERTIES COMPILE_OPTIONS
+        "-Wno-strict-prototypes"
+        )
 else()
     idf_component_get_property(COMPONENT_DIR freertos COMPONENT_DIR)
 

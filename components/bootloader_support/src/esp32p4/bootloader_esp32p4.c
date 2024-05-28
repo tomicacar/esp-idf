@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,7 +10,6 @@
 #include "esp_image_format.h"
 #include "flash_qio_mode.h"
 #include "esp_rom_gpio.h"
-#include "esp_rom_efuse.h"
 #include "esp_rom_uart.h"
 #include "esp_rom_sys.h"
 #include "esp_rom_spiflash.h"
@@ -22,7 +21,6 @@
 #include "soc/spi_periph.h"
 #include "soc/cache_reg.h"
 #include "soc/io_mux_reg.h"
-#include "esp32p4/rom/efuse.h"
 #include "esp32p4/rom/ets_sys.h"
 #include "esp32p4/rom/spi_flash.h"
 #include "bootloader_common.h"
@@ -31,6 +29,7 @@
 #include "bootloader_flash_config.h"
 #include "bootloader_mem.h"
 #include "esp_private/regi2c_ctrl.h"
+#include "soc/chip_revision.h"
 #include "soc/regi2c_lp_bias.h"
 #include "soc/regi2c_bias.h"
 #include "bootloader_console.h"
@@ -44,6 +43,9 @@
 #include "hal/lpwdt_ll.h"
 #include "soc/lp_wdt_reg.h"
 #include "hal/efuse_hal.h"
+#include "soc/regi2c_syspll.h"
+#include "soc/regi2c_cpll.h"
+#include "soc/regi2c_bias.h"
 
 static const char *TAG = "boot.esp32p4";
 
@@ -64,14 +66,17 @@ static void bootloader_check_wdt_reset(void)
 {
     int wdt_rst = 0;
     soc_reset_reason_t rst_reason = esp_rom_get_reset_reason(0);
-    if (rst_reason == RESET_REASON_CORE_RTC_WDT || rst_reason == RESET_REASON_CORE_MWDT0 || rst_reason == RESET_REASON_CORE_MWDT1 ||
-        rst_reason == RESET_REASON_CPU0_MWDT0 || rst_reason == RESET_REASON_CPU0_MWDT1 || rst_reason == RESET_REASON_CPU0_RTC_WDT) {
-        ESP_LOGW(TAG, "PRO CPU has been reset by WDT.");
+    if (rst_reason == RESET_REASON_CPU_MWDT || rst_reason == RESET_REASON_CPU_RWDT || rst_reason == RESET_REASON_CORE_MWDT ||
+        rst_reason == RESET_REASON_CORE_RWDT || rst_reason == RESET_REASON_SYS_RWDT) {
+        ESP_LOGW(TAG, "CPU has been reset by WDT.");
         wdt_rst = 1;
     }
     if (wdt_rst) {
         // if reset by WDT dump info from trace port
         wdt_reset_info_dump(0);
+#if !CONFIG_ESP_SYSTEM_SINGLE_CORE_MODE
+        wdt_reset_info_dump(1);
+#endif
     }
     wdt_reset_cpu0_info_enable();
 }
@@ -85,10 +90,17 @@ static void bootloader_super_wdt_auto_feed(void)
 
 static inline void bootloader_hardware_init(void)
 {
-    //TODO: IDF-7528
-    // /* Enable analog i2c master clock */
-    // SET_PERI_REG_MASK(MODEM_LPCON_CLK_CONF_REG, MODEM_LPCON_CLK_I2C_MST_EN);
-    // SET_PERI_REG_MASK(MODEM_LPCON_I2C_MST_CLK_CONF_REG, MODEM_LPCON_CLK_I2C_MST_SEL_160M);
+    // regi2c is enabled by default on ESP32P4, do nothing
+    unsigned chip_version = efuse_hal_chip_revision();
+    if (!ESP_CHIP_REV_ABOVE(chip_version, 1)) {
+        // On ESP32P4 ECO0, the default (power on reset) CPLL and SPLL frequencies are very high, lower them to avoid bias may not be enough in bootloader
+        // And we are fixing SPLL to be 480MHz after app is up
+        REGI2C_WRITE_MASK(I2C_CPLL, I2C_CPLL_OC_DIV_7_0, 6); // lower default cpu_pll freq to 400M
+        REGI2C_WRITE_MASK(I2C_SYSPLL, I2C_SYSPLL_OC_DIV_7_0, 8); // lower default sys_pll freq to 480M
+        esp_rom_delay_us(100);
+    }
+    REGI2C_WRITE_MASK(I2C_BIAS, I2C_BIAS_DREG_1P1, 10);
+    REGI2C_WRITE_MASK(I2C_BIAS, I2C_BIAS_DREG_1P1_PVT, 10);
 }
 
 static inline void bootloader_ana_reset_config(void)
@@ -133,7 +145,7 @@ esp_err_t bootloader_init(void)
     /* print 2nd bootloader banner */
     bootloader_print_banner();
 
-#if !CONFIG_APP_BUILD_TYPE_PURE_RAM_APP
+#if !CONFIG_APP_BUILD_TYPE_RAM
     //init cache hal
     cache_hal_init();
     //reset mmu
@@ -145,7 +157,6 @@ esp_err_t bootloader_init(void)
         ESP_LOGE(TAG, "failed when running XMC startup flow, reboot!");
         return ret;
     }
-#if !CONFIG_APP_BUILD_TYPE_RAM
     // read bootloader header
     if ((ret = bootloader_read_bootloader_header()) != ESP_OK) {
         return ret;
@@ -154,14 +165,13 @@ esp_err_t bootloader_init(void)
     if ((ret = bootloader_check_bootloader_validity()) != ESP_OK) {
         return ret;
     }
-#endif // !CONFIG_APP_BUILD_TYPE_RAM
     // initialize spi flash
     if ((ret = bootloader_init_spi_flash()) != ESP_OK) {
         return ret;
     }
-#endif // #if !CONFIG_APP_BUILD_TYPE_PURE_RAM_APP
+#endif // !CONFIG_APP_BUILD_TYPE_RAM
 
-    // check whether a WDT reset happend
+    // check whether a WDT reset happened
     bootloader_check_wdt_reset();
     // config WDT
     bootloader_config_wdt();

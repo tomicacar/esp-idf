@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+# SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
 # SPDX-License-Identifier: Apache-2.0
 import argparse
 import os
 import sys
 import traceback
 
+import nvs_check
 import nvs_logger
 import nvs_parser
 from nvs_logger import nvs_log
@@ -24,11 +25,11 @@ def program_args() -> argparse.Namespace:
         help='check partition for potential errors',
     )
     tmp = {
-        'all': 'print everything',
+        'all': 'print written, erased and empty entries',
         'written': 'print only currently written entries',
         'minimal': 'print only namespace:key=value pairs',
-        'namespaces': 'list all written namespaces',
         'blobs': 'print all blobs and strings',
+        'namespaces': 'list all written namespaces',
         'storage_info': 'print storage related information (free/used entries, etc)',
         'none': 'do not print anything (if you only want to do integrity check)',
     }
@@ -109,7 +110,7 @@ def main() -> None:
 
         if args.integrity_check:
             nvs_log.info()
-            nvs_logger.integrity_check(nvs)
+            nvs_check.integrity_check(nvs, nvs_log)
 
 
 if __name__ == '__main__':

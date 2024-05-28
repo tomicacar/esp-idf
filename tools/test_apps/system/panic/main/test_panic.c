@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
@@ -7,10 +7,13 @@
 #include <unistd.h>
 #include <assert.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "esp_partition.h"
 #include "esp_flash.h"
 #include "esp_system.h"
+#include "spi_flash_mmap.h"
+#include "esp_core_dump.h"
 
 #include "esp_private/cache_utils.h"
 #include "esp_memory_utils.h"
@@ -18,6 +21,9 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+#include "hal/mpu_hal.h"
+#include "rom/cache.h"
 
 /* Test utility function */
 
@@ -61,12 +67,34 @@ void test_task_wdt_cpu0(void)
     }
 }
 
+#if CONFIG_ESP_SYSTEM_HW_STACK_GUARD
+
 __attribute__((optimize("-O0")))
+static void test_hw_stack_guard_cpu(void* arg)
+{
+    uint32_t buf[256];
+    test_hw_stack_guard_cpu(arg);
+}
+
 void test_hw_stack_guard_cpu0(void)
 {
-    uint32_t buf[128];
-    test_hw_stack_guard_cpu0();
+    xTaskCreatePinnedToCore(test_hw_stack_guard_cpu, "HWSG0", 512, NULL, 1, NULL, 0);
+    while (true) {
+        vTaskDelay(100);
+    }
 }
+
+#if !CONFIG_FREERTOS_UNICORE
+void test_hw_stack_guard_cpu1(void)
+{
+    xTaskCreatePinnedToCore(test_hw_stack_guard_cpu, "HWSG1", 512, NULL, 1, NULL, 1);
+    while (true) {
+        vTaskDelay(100);
+    }
+}
+
+#endif // CONFIG_FREERTOS_UNICORE
+#endif // CONFIG_ESP_SYSTEM_HW_STACK_GUARD
 
 #if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH && CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY
 
@@ -112,21 +140,19 @@ void test_task_wdt_cpu1(void)
     }
 }
 
-void test_task_wdt_both_cpus(void)
-{
-    xTaskCreatePinnedToCore(infinite_loop, "Infinite loop", 1024, NULL, 4, NULL, 1);
-    /* Give some time to the task on CPU 1 to be scheduled */
-    vTaskDelay(1);
-    xTaskCreatePinnedToCore(infinite_loop, "Infinite loop", 1024, NULL, 4, NULL, 0);
-    while (true) {
-        ;
-    }
-}
 #endif
 
 void __attribute__((no_sanitize_undefined)) test_storeprohibited(void)
 {
-    *(int*) 0x1 = 0;
+    *(int*) 0x4 = 0;
+    test_task_wdt_cpu0(); /* Trap for unhandled asynchronous bus errors */
+}
+
+void __attribute__((no_sanitize_undefined)) test_loadprohibited(void)
+{
+    static int __attribute__((used)) var;
+    var = *(int*) 0x4;
+    test_task_wdt_cpu0(); /* Trap for unhandled asynchronous bus errors */
 }
 
 void IRAM_ATTR test_cache_error(void)
@@ -153,6 +179,46 @@ void IRAM_ATTR test_assert_cache_disabled(void)
 {
     spi_flash_disable_interrupts_caches_and_other_cpu();
     assert(0);
+}
+
+const char TEST_STR[] = "my_tag";
+void test_assert_cache_write_back_error_can_print_backtrace(void)
+{
+    printf("1) %p\n", TEST_STR);
+    *(uint32_t*)TEST_STR = 3; // We changed the rodata string.
+    // All chips except ESP32S3 stop execution here and raise a LoadStore error on the line above.
+#if CONFIG_IDF_TARGET_ESP32S3
+    // On the ESP32S3, the error occurs later when the cache writeback is triggered
+    // (in this test, a direct call to Cache_WriteBack_All).
+    Cache_WriteBack_All(); // Cache writeback triggers the invalid cache access interrupt.
+#endif
+    // We are testing that the backtrace is printed instead of TG1WDT.
+    printf("2) %p\n", TEST_STR); // never get to this place.
+}
+
+void test_assert_cache_write_back_error_can_print_backtrace2(void)
+{
+    printf("1) %p\n", TEST_STR);
+    *(uint32_t*)TEST_STR = 3; // We changed the rodata string.
+    // All chips except ESP32S3 stop execution here and raise a LoadStore error on the line above.
+    // On the ESP32S3, the error occurs later when the cache writeback is triggered
+    // (in this test, a large range of DRAM is mapped and read, causing an error).
+    uint8_t temp = 0;
+    size_t map_size = SPI_FLASH_SEC_SIZE * 512;
+    const void *map;
+    spi_flash_mmap_handle_t out_handle;
+    esp_err_t err = spi_flash_mmap(0, map_size, SPI_FLASH_MMAP_DATA, &map, &out_handle);
+    if (err != ESP_OK) {
+        printf("spi_flash_mmap failed %x\n", err);
+        return;
+    }
+    const uint8_t *rodata = map;
+    for (size_t i = 0; i < map_size; i++) {
+        temp = rodata[i];
+    }
+    // Cache writeback triggers the invalid cache access interrupt.
+    // We are testing that the backtrace is printed instead of TG1WDT.
+    printf("2) %p 0x%" PRIx8 " \n", TEST_STR, temp); // never get to this place.
 }
 
 /**
@@ -202,3 +268,90 @@ void test_ub(void)
     uint8_t stuff[1] = {rand()};
     printf("%d\n", stuff[rand()]);
 }
+
+#if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH && CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF
+void test_setup_coredump_summary(void)
+{
+    if (esp_core_dump_image_erase() != ESP_OK)
+        die("Coredump image can not be erased!");
+    assert(0);
+}
+
+void test_coredump_summary(void)
+{
+    esp_core_dump_summary_t *summary = malloc(sizeof(esp_core_dump_summary_t));
+    if (summary) {
+        esp_err_t err = esp_core_dump_get_summary(summary);
+        if (err == ESP_OK) {
+            printf("App ELF file SHA256: %s\n", (char *)summary->app_elf_sha256);
+            printf("Crashed task: %s\n", summary->exc_task);
+#if __XTENSA__
+            printf("Exception cause: %ld\n", summary->ex_info.exc_cause);
+#else
+            printf("Exception cause: %ld\n", summary->ex_info.mcause);
+#endif
+            char panic_reason[200];
+            err = esp_core_dump_get_panic_reason(panic_reason, sizeof(panic_reason));
+            if (err == ESP_OK) {
+                printf("Panic reason: %s\n", panic_reason);
+            }
+        }
+        free(summary);
+    }
+}
+#endif
+
+/* NOTE: The following test verifies the behaviour for the
+ * Xtensa-specific MPU instructions (Refer WDTLB, DSYNC, WDTIB, ISYNC)
+ * used for memory protection.
+ *
+ * However, this test is not valid for S2 and S3, because they have PMS
+ * enabled on top of this, giving unpredictable results.
+ */
+#if CONFIG_IDF_TARGET_ESP32
+void test_illegal_access(void)
+{
+    intptr_t addr = 0x80000000; // MPU region 4
+    volatile int __attribute__((unused)) val = INT16_MAX;
+
+    // Marked as an illegal access region at startup in ESP32, ESP32S2.
+    // Make accessible temporarily.
+    mpu_hal_set_region_access(4, MPU_REGION_RW);
+
+    val = *((int*) addr);
+    printf("[1] val: %d at %p\n", val, (void *)addr);
+
+    // Make access to region illegal again.
+    mpu_hal_set_region_access(4, MPU_REGION_ILLEGAL);
+    val = *((int*) addr);
+    // Does not reach here as device resets due to illegal access
+    printf("[2] val: %d at %p\n", val, (void *)addr);
+}
+#endif
+
+#if CONFIG_ESP_COREDUMP_CAPTURE_DRAM
+int g_data_var = 42;
+int g_bss_var;
+char *g_heap_ptr;
+COREDUMP_IRAM_DATA_ATTR uint32_t g_cd_iram = 0x4242;
+COREDUMP_DRAM_ATTR uint32_t g_cd_dram = 0x4343;
+#if SOC_RTC_MEM_SUPPORTED
+COREDUMP_RTC_FAST_ATTR uint32_t g_rtc_fast_var;
+COREDUMP_RTC_DATA_ATTR uint32_t g_rtc_data_var = 0x55A9;
+#endif
+
+void test_capture_dram(void)
+{
+    g_data_var++;
+    g_bss_var = 55;
+    g_heap_ptr = strdup("Coredump Test");
+    assert(g_heap_ptr);
+    g_cd_iram++;
+    g_cd_dram++;
+#if SOC_RTC_MEM_SUPPORTED
+    g_rtc_fast_var = 0xAABBCCDD;
+    g_rtc_data_var++;
+#endif
+    assert(0);
+}
+#endif

@@ -81,17 +81,20 @@ struct gdma_hal_context_t {
     void (*disconnect_peri)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir); /// Disconnect the channel from a peripheral
     void (*enable_burst)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_data_burst, bool en_desc_burst); /// Enable burst mode
     void (*set_ext_mem_align)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, uint8_t align); /// Set the alignment of the external memory
-    void (*set_strategy)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_owner_check, bool en_desc_write_back); /// Set some misc strategy of the channel behaviour
+    void (*set_strategy)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_owner_check, bool en_desc_write_back, bool eof_till_popped); /// Set some misc strategy of the channel behaviour
     uint32_t (*get_intr_status_reg)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir); // Get the interrupt status register address
     void (*enable_intr)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, uint32_t intr_event_mask, bool en_or_dis); /// Enable the channel interrupt
     void (*clear_intr)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, uint32_t intr_event_mask); /// Clear the channel interrupt
-    uint32_t (*read_intr_status)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir); /// Read the channel interrupt status
+    uint32_t (*read_intr_status)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool raw); /// Read the channel interrupt status
     uint32_t (*get_eof_desc_addr)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool is_success); /// Get the address of the descriptor with success/error EOF flag set
 #if SOC_GDMA_SUPPORT_CRC
     void (*clear_crc)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir); /// Clear the CRC interim results
     void (*set_crc_poly)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, const gdma_hal_crc_config_t *config); /// Set the CRC polynomial
     uint32_t (*get_crc_result)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir); /// Get the CRC result
 #endif // SOC_GDMA_SUPPORT_CRC
+#if SOC_GDMA_SUPPORT_ETM
+    void (*enable_etm_task)(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_or_dis); /// Enable the ETM task
+#endif // SOC_GDMA_SUPPORT_ETM
 };
 
 void gdma_hal_deinit(gdma_hal_context_t *hal);
@@ -114,7 +117,7 @@ void gdma_hal_enable_burst(gdma_hal_context_t *hal, int chan_id, gdma_channel_di
 
 void gdma_hal_set_ext_mem_align(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, uint8_t align);
 
-void gdma_hal_set_strategy(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_owner_check, bool en_desc_write_back);
+void gdma_hal_set_strategy(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_owner_check, bool en_desc_write_back, bool eof_till_popped);
 
 void gdma_hal_enable_intr(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, uint32_t intr_event_mask, bool en_or_dis);
 
@@ -122,7 +125,7 @@ void gdma_hal_clear_intr(gdma_hal_context_t *hal, int chan_id, gdma_channel_dire
 
 uint32_t gdma_hal_get_intr_status_reg(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir);
 
-uint32_t gdma_hal_read_intr_status(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir);
+uint32_t gdma_hal_read_intr_status(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool raw);
 
 uint32_t gdma_hal_get_eof_desc_addr(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool is_success);
 
@@ -140,6 +143,10 @@ void gdma_hal_set_crc_poly(gdma_hal_context_t *hal, int chan_id, gdma_channel_di
 
 uint32_t gdma_hal_get_crc_result(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir);
 #endif // SOC_GDMA_SUPPORT_CRC
+
+#if SOC_GDMA_SUPPORT_ETM
+void gdma_hal_enable_etm_task(gdma_hal_context_t *hal, int chan_id, gdma_channel_direction_t dir, bool en_or_dis);
+#endif
 
 #ifdef __cplusplus
 }
