@@ -21,6 +21,7 @@
 #include "esp_rrm.h"
 #include "esp_wnm.h"
 #include "rsn_supp/wpa.h"
+#include "esp_private/wifi.h"
 
 
 struct wpa_supplicant g_wpa_supp;
@@ -32,7 +33,7 @@ static void *s_supplicant_api_lock = NULL;
 static bool s_supplicant_task_init_done;
 
 static int handle_action_frm(u8 *frame, size_t len,
-			     u8 *sender, u32 rssi, u8 channel)
+			     u8 *sender, int8_t rssi, u8 channel)
 {
 	struct ieee_mgmt_frame *frm = os_malloc(sizeof(struct ieee_mgmt_frame) + len);
 
@@ -56,7 +57,7 @@ static int handle_action_frm(u8 *frame, size_t len,
 }
 
 static void handle_rrm_frame(struct wpa_supplicant *wpa_s, u8 *sender,
-			     u8 *payload, size_t len, u32 rssi)
+			     u8 *payload, size_t len, int8_t rssi)
 {
 	if (payload[0] == WLAN_RRM_NEIGHBOR_REPORT_RESPONSE) {
 		/* neighbor report parsing */
@@ -72,7 +73,7 @@ static void handle_rrm_frame(struct wpa_supplicant *wpa_s, u8 *sender,
 	}
 }
 
-static int mgmt_rx_action(u8 *sender, u8 *payload, size_t len, u8 channel, u32 rssi)
+static int mgmt_rx_action(u8 *sender, u8 *payload, size_t len, u8 channel, int8_t rssi)
 {
 	u8 category;
 	u8 bssid[ETH_ALEN];
@@ -195,7 +196,7 @@ void esp_supplicant_unset_all_appie(void)
 }
 
 static int ieee80211_handle_rx_frm(u8 type, u8 *frame, size_t len, u8 *sender,
-				   u32 rssi, u8 channel, u64 current_tsf)
+				   int8_t rssi, u8 channel, u64 current_tsf)
 {
 	int ret = 0;
 
@@ -550,6 +551,7 @@ static uint8_t get_extended_caps_ie(uint8_t *ie, size_t len)
 	uint8_t ext_caps_ie[5] = {0};
 	uint8_t ext_caps_ie_len = 3;
 	uint8_t *pos = ext_caps_ie;
+	wifi_ioctl_config_t cfg = {0};
 
 	if (!esp_wifi_is_btm_enabled_internal(WIFI_IF_STA)) {
 		return 0;
@@ -557,7 +559,12 @@ static uint8_t get_extended_caps_ie(uint8_t *ie, size_t len)
 
 	*pos++ = WLAN_EID_EXT_CAPAB;
 	*pos++ = ext_caps_ie_len;
-	*pos++ = 0;
+	esp_err_t err = esp_wifi_internal_ioctl(WIFI_IOCTL_GET_STA_HT2040_COEX, &cfg);
+	if (err == ESP_OK && cfg.data.ht2040_coex.enable) {
+		*pos++ |= BIT(WLAN_EXT_CAPAB_20_40_COEX);
+	} else {
+		*pos++ = 0;
+    }
 	*pos++ = 0;
 #define CAPAB_BSS_TRANSITION BIT(3)
 	*pos |= CAPAB_BSS_TRANSITION;

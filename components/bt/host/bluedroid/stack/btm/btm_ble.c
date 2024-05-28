@@ -497,6 +497,62 @@ void BTM_BleOobDataReply(BD_ADDR bd_addr, UINT8 res, UINT8 len, UINT8 *p_data)
 #endif
 }
 
+/*******************************************************************************
+**
+** Function         BTM_BleSecureConnectionOobDataReply
+**
+** Description      This function is called to provide the OOB data for
+**                  SMP in response to BTM_LE_SC_OOB_REQ_EVT when secure connection
+**
+** Parameters:      bd_addr     - Address of the peer device
+**                  p_c         - pointer to Confirmation
+**                  p_r         - pointer to Randomizer
+**
+*******************************************************************************/
+void BTM_BleSecureConnectionOobDataReply(BD_ADDR bd_addr, UINT8 *p_c, UINT8 *p_r)
+{
+#if SMP_INCLUDED == TRUE
+    tBTM_SEC_DEV_REC *p_dev_rec = btm_find_dev (bd_addr);
+
+    BTM_TRACE_DEBUG ("%s", __func__);
+
+    if (p_dev_rec == NULL) {
+        BTM_TRACE_ERROR("%s Unknown device", __func__);
+        return;
+    }
+
+    p_dev_rec->sec_flags |= BTM_SEC_LE_AUTHENTICATED;
+
+    tSMP_SC_OOB_DATA oob;
+    memset(&oob, 0, sizeof(tSMP_SC_OOB_DATA));
+
+    oob.peer_oob_data.present = true;
+    memcpy(&oob.peer_oob_data.commitment, p_c, BT_OCTET16_LEN);
+    memcpy(&oob.peer_oob_data.randomizer, p_r, BT_OCTET16_LEN);
+    oob.peer_oob_data.addr_rcvd_from.type = p_dev_rec->ble.ble_addr_type;
+    memcpy(oob.peer_oob_data.addr_rcvd_from.bda, bd_addr, BD_ADDR_LEN);
+
+    SMP_SecureConnectionOobDataReply((UINT8 *)&oob);
+#endif
+}
+
+/*******************************************************************************
+**
+** Function         BTM_BleSecureConnectionCreateOobData
+**
+** Description      This function is called to create the OOB data for
+**                  SMP when secure connection
+**
+*******************************************************************************/
+void BTM_BleSecureConnectionCreateOobData(void)
+{
+#if SMP_INCLUDED == TRUE
+    BTM_TRACE_DEBUG ("%s", __func__);
+
+    SMP_CreateLocalSecureConnectionsOobData();
+#endif
+}
+
 /******************************************************************************
 **
 ** Function         BTM_BleSetConnScanParams
@@ -2224,7 +2280,15 @@ UINT8 btm_proc_smp_cback(tSMP_EVT event, BD_ADDR bd_addr, tSMP_EVT_DATA *p_data)
 
         }
     } else {
-        BTM_TRACE_ERROR("btm_proc_smp_cback received for unknown device");
+        if (event == SMP_SC_LOC_OOB_DATA_UP_EVT) {
+            tBTM_LE_EVT_DATA evt_data;
+            memcpy(&evt_data.local_oob_data, &p_data->loc_oob_data, sizeof(tSMP_LOC_OOB_DATA));
+            if (btm_cb.api.p_le_callback) {
+                (*btm_cb.api.p_le_callback)(event, bd_addr, &evt_data);
+            }
+        } else {
+            BTM_TRACE_ERROR("btm_proc_smp_cback received for unknown device");
+        }
     }
     return 0;
 }
@@ -2843,5 +2907,55 @@ BOOLEAN btm_get_current_conn_params(BD_ADDR bda, UINT16 *interval, UINT16 *laten
     return FALSE;
 }
 
+uint8_t btm_ble_adv_active_count(void)
+{
+    uint8_t count = 0;
+    tBTM_BLE_INQ_CB *p_cb = &btm_cb.ble_ctr_cb.inq_var;
+
+    if (p_cb->state & BTM_BLE_ADVERTISING) {
+        count++;
+    }
+
+    return count;
+}
+
+uint8_t btm_ble_scan_active_count(void)
+{
+    uint8_t count = 0;
+    tBTM_BLE_INQ_CB *p_cb = &btm_cb.ble_ctr_cb.inq_var;
+
+    if (p_cb->state & BTM_BLE_SCANNING) {
+        count++;
+    }
+
+    return count;
+}
+
+#if (SMP_INCLUDED == TRUE)
+uint8_t btm_ble_sec_dev_active_count(void)
+{
+    tBTM_SEC_DEV_REC *p_dev_rec = NULL;
+    list_node_t *p_node = NULL;
+    uint8_t count = 0;
+
+    /* First look for the non-paired devices for the oldest entry */
+    for (p_node = list_begin(btm_cb.p_sec_dev_rec_list); p_node; p_node = list_next(p_node)) {
+        p_dev_rec = list_node(p_node);
+        if (p_dev_rec && (p_dev_rec->sec_flags & BTM_SEC_IN_USE) && (p_dev_rec->ble.key_type != BTM_LE_KEY_NONE)) {
+            count++;
+        }
+    }
+
+    return count;
+}
+#endif
+
+#if (BLE_PRIVACY_SPT == TRUE)
+uint8_t btm_ble_privacy_is_enabled(void)
+{
+    tBTM_BLE_CB *p_cb = &btm_cb.ble_ctr_cb;
+    return (p_cb->privacy_mode != BTM_PRIVACY_NONE);
+}
+#endif
 
 #endif /* BLE_INCLUDED */

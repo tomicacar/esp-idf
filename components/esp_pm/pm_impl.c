@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2016-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2016-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -71,10 +71,13 @@
  */
 #define CCOMPARE_UPDATE_TIMEOUT 1000000
 
-/* When changing CCOMPARE, don't allow changes if the difference is less
- * than this. This is to prevent setting CCOMPARE below CCOUNT.
+/* The number of CPU cycles required from obtaining the base ccount to configuring
+   the calculated ccompare value. (In order to avoid ccompare being updated to a value
+   smaller than the current ccount, this update should be discarded if the next tick
+   is too close to this moment, and this value is used to calculate the threshold for
+   determining whether or not a skip is required.)
  */
-#define CCOMPARE_MIN_CYCLES_IN_FUTURE 1000
+#define CCOMPARE_PREPARE_CYCLES_IN_FREQ_UPDATE  60
 #endif // CONFIG_FREERTOS_SYSTICK_USES_CCOUNT
 
 /* When light sleep is used, wake this number of microseconds earlier than
@@ -292,21 +295,9 @@ esp_err_t esp_pm_configure(const void* vconfig)
                   min_freq_mhz,
                   config->light_sleep_enable ? "ENABLED" : "DISABLED");
 
-    portENTER_CRITICAL(&s_switch_lock);
-
-    bool res __attribute__((unused));
-    res = rtc_clk_cpu_freq_mhz_to_config(max_freq_mhz, &s_cpu_freq_by_mode[PM_MODE_CPU_MAX]);
-    assert(res);
-    res = rtc_clk_cpu_freq_mhz_to_config(apb_max_freq, &s_cpu_freq_by_mode[PM_MODE_APB_MAX]);
-    assert(res);
-    res = rtc_clk_cpu_freq_mhz_to_config(min_freq_mhz, &s_cpu_freq_by_mode[PM_MODE_APB_MIN]);
-    assert(res);
-    s_cpu_freq_by_mode[PM_MODE_LIGHT_SLEEP] = s_cpu_freq_by_mode[PM_MODE_APB_MIN];
-    s_light_sleep_en = config->light_sleep_enable;
-    s_config_changed = true;
-    portEXIT_CRITICAL(&s_switch_lock);
 
 #if CONFIG_PM_POWER_DOWN_CPU_IN_LIGHT_SLEEP && SOC_PM_SUPPORT_CPU_PD
+    // must be initialized before s_light_sleep_en set true, to avoid entering idle and sleep in this function.
     esp_err_t ret = esp_sleep_cpu_pd_low_init(config->light_sleep_enable);
     if (config->light_sleep_enable && ret != ESP_OK) {
         ESP_LOGW(TAG, "Failed to enable CPU power down during light sleep.");
@@ -318,6 +309,19 @@ esp_err_t esp_pm_configure(const void* vconfig)
         esp_pm_light_sleep_default_params_config(min_freq_mhz, max_freq_mhz);
     }
 #endif
+
+    portENTER_CRITICAL(&s_switch_lock);
+    bool res __attribute__((unused));
+    res = rtc_clk_cpu_freq_mhz_to_config(max_freq_mhz, &s_cpu_freq_by_mode[PM_MODE_CPU_MAX]);
+    assert(res);
+    res = rtc_clk_cpu_freq_mhz_to_config(apb_max_freq, &s_cpu_freq_by_mode[PM_MODE_APB_MAX]);
+    assert(res);
+    res = rtc_clk_cpu_freq_mhz_to_config(min_freq_mhz, &s_cpu_freq_by_mode[PM_MODE_APB_MIN]);
+    assert(res);
+    s_cpu_freq_by_mode[PM_MODE_LIGHT_SLEEP] = s_cpu_freq_by_mode[PM_MODE_APB_MIN];
+    s_light_sleep_en = config->light_sleep_enable;
+    s_config_changed = true;
+    portEXIT_CRITICAL(&s_switch_lock);
 
     return ESP_OK;
 }
@@ -539,15 +543,17 @@ static void IRAM_ATTR do_switch(pm_mode_t new_mode)
  * would happen without the frequency change.
  * Assumes that the new_frequency = old_frequency * s_ccount_mul / s_ccount_div.
  */
-static void IRAM_ATTR update_ccompare(void)
+static __attribute__((optimize("-O2"))) void IRAM_ATTR update_ccompare(void)
 {
+    uint32_t ccompare_min_cycles_in_future = ((s_ccount_div + s_ccount_mul - 1) / s_ccount_mul) * CCOMPARE_PREPARE_CYCLES_IN_FREQ_UPDATE;
 #if CONFIG_PM_UPDATE_CCOMPARE_HLI_WORKAROUND
     /* disable level 4 and below */
     uint32_t irq_status = XTOS_SET_INTLEVEL(XCHAL_DEBUGLEVEL - 2);
 #endif
     uint32_t ccount = cpu_hal_get_cycle_count();
     uint32_t ccompare = XTHAL_GET_CCOMPARE(XT_TIMER_INDEX);
-    if ((ccompare - CCOMPARE_MIN_CYCLES_IN_FUTURE) - ccount < UINT32_MAX / 2) {
+
+    if ((ccompare - ccompare_min_cycles_in_future) - ccount < UINT32_MAX / 2) {
         uint32_t diff = ccompare - ccount;
         uint32_t diff_scaled = (diff * s_ccount_mul + s_ccount_div - 1) / s_ccount_div;
         if (diff_scaled < _xt_tick_divisor) {

@@ -191,7 +191,7 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
     uint8_t dr3;
     uint8_t dchgp;
     uint8_t dcur;
-    uint8_t dbias;
+    uint8_t dbias = 3;
 
     /* BBPLL CALIBRATION START */
     CLEAR_PERI_REG_MASK(I2C_MST_ANA_CONF0_REG, I2C_MST_BBPLL_STOP_FORCE_HIGH);
@@ -209,7 +209,6 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
             dr3 = 0;
             dchgp = 5;
             dcur = 3;
-            dbias = 2;
             break;
         case RTC_XTAL_FREQ_32M:
             div_ref = 1;
@@ -218,7 +217,6 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
             dr3 = 1;
             dchgp = 4;
             dcur = 0;
-            dbias = 2;
             break;
         default:
             div_ref = 0;
@@ -227,7 +225,6 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
             dr3 = 0;
             dchgp = 5;
             dcur = 3;
-            dbias = 2;
             break;
         }
         REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_MODE_HF, 0x6B);
@@ -243,7 +240,6 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
             dr3 = 0;
             dchgp = 5;
             dcur = 3;
-            dbias = 2;
             break;
         case RTC_XTAL_FREQ_32M:
             div_ref = 1;
@@ -252,7 +248,6 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
             dr3 = 0;
             dchgp = 5;
             dcur = 3;
-            dbias = 2;
             break;
         default:
             div_ref = 0;
@@ -261,7 +256,6 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
             dr3 = 0;
             dchgp = 5;
             dcur = 3;
-            dbias = 2;
             break;
         }
         REGI2C_WRITE(I2C_BBPLL, I2C_BBPLL_MODE_HF, 0x69);
@@ -277,6 +271,7 @@ void rtc_clk_bbpll_configure(rtc_xtal_freq_t xtal_freq, int pll_freq)
     REGI2C_WRITE_MASK(I2C_BBPLL, I2C_BBPLL_OC_VCO_DBIAS, dbias);
     /* WAIT CALIBRATION DONE */
     while (!GET_PERI_REG_MASK(I2C_MST_ANA_CONF0_REG, I2C_MST_BBPLL_CAL_DONE));
+    esp_rom_delay_us(10);
     /* BBPLL CALIBRATION STOP */
     CLEAR_PERI_REG_MASK(I2C_MST_ANA_CONF0_REG, I2C_MST_BBPLL_STOP_FORCE_LOW);
     SET_PERI_REG_MASK(I2C_MST_ANA_CONF0_REG, I2C_MST_BBPLL_STOP_FORCE_HIGH);
@@ -301,18 +296,6 @@ static void rtc_clk_cpu_freq_to_pll_mhz(int cpu_freq_mhz)
         SOC_LOGE(TAG, "invalid frequency");
     }
 
-    /* cpu_frequency < 240M: dbias = pvt-dig + 2;
-       cpu_frequency = 240M: dbias = pvt-dig + 3;
-     */
-    if (cpu_freq_mhz != 240) {
-        REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_RTC_DREG, g_rtc_dbias_pvt_non_240m);
-        REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_DIG_DREG, g_dig_dbias_pvt_non_240m);
-    } else {
-        REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_RTC_DREG, g_rtc_dbias_pvt_240m);
-        REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_DIG_DREG, g_dig_dbias_pvt_240m);
-    }
-    esp_rom_delay_us(40);
-
     /* There are totally 6 LDO slaves(all on by default). At the moment of swithing LDO slave, LDO voltage will also change instantaneously.
      * LDO slave can reduce the voltage change caused by switching frequency.
      * CPU frequency <= 40M : just open 3 LDO slaves; CPU frequency = 80M : open 4 LDO slaves; CPU frequency = 160M : open 5 LDO slaves; CPU frequency = 240M : open 6 LDO slaves;
@@ -323,23 +306,34 @@ static void rtc_clk_cpu_freq_to_pll_mhz(int cpu_freq_mhz)
     int pd_slave = cpu_freq_mhz / 80;
     rtc_cpu_freq_config_t cur_config;
     rtc_clk_cpu_freq_get_config(&cur_config);
+    /* cpu_frequency < 240M: dbias = pvt-dig + 2;
+     * cpu_frequency = 240M: dbias = pvt-dig + 3;
+     */
     if (cpu_freq_mhz > cur_config.freq_mhz) {
-        REG_SET_FIELD(RTC_CNTL_DATE_REG, RTC_CNTL_SLAVE_PD,  DEFAULT_LDO_SLAVE >> pd_slave);
-        REG_SET_FIELD(SYSTEM_CPU_PER_CONF_REG, SYSTEM_CPUPERIOD_SEL, per_conf);
-        REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_PRE_DIV_CNT, 0);
-        /* switch clock source */
-        REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_SOC_CLK_SEL, DPORT_SOC_CLK_SEL_PLL);
-        rtc_clk_apb_freq_update(80 * MHZ);
-        ets_update_cpu_frequency(cpu_freq_mhz);
-    } else {
-        REG_SET_FIELD(SYSTEM_CPU_PER_CONF_REG, SYSTEM_CPUPERIOD_SEL, per_conf);
-        REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_PRE_DIV_CNT, 0);
-        /* switch clock source */
-        REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_SOC_CLK_SEL, DPORT_SOC_CLK_SEL_PLL);
-        rtc_clk_apb_freq_update(80 * MHZ);
-        ets_update_cpu_frequency(cpu_freq_mhz);
+        if (cpu_freq_mhz == 240) {
+            REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_RTC_DREG, g_rtc_dbias_pvt_240m);
+            REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_DIG_DREG, g_dig_dbias_pvt_240m);
+            esp_rom_delay_us(40);
+        }
         REG_SET_FIELD(RTC_CNTL_DATE_REG, RTC_CNTL_SLAVE_PD,  DEFAULT_LDO_SLAVE >> pd_slave);
     }
+    REG_SET_FIELD(SYSTEM_CPU_PER_CONF_REG, SYSTEM_CPUPERIOD_SEL, per_conf);
+    REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_PRE_DIV_CNT, 0);
+    /* switch clock source */
+    REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_SOC_CLK_SEL, DPORT_SOC_CLK_SEL_PLL);
+    rtc_clk_apb_freq_update(80 * MHZ);
+    ets_update_cpu_frequency(cpu_freq_mhz);
+
+    if (cpu_freq_mhz < cur_config.freq_mhz) {
+        if (cur_config.freq_mhz == 240) {
+            REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_RTC_DREG, g_rtc_dbias_pvt_non_240m);
+            REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_DIG_DREG, g_dig_dbias_pvt_non_240m);
+            esp_rom_delay_us(40);
+        }
+
+        REG_SET_FIELD(RTC_CNTL_DATE_REG, RTC_CNTL_SLAVE_PD,  DEFAULT_LDO_SLAVE >> pd_slave);
+    }
+
 }
 
 bool rtc_clk_cpu_freq_mhz_to_config(uint32_t freq_mhz, rtc_cpu_freq_config_t *out_config)
@@ -496,9 +490,9 @@ void rtc_clk_cpu_freq_set_xtal(void)
  */
 void rtc_clk_cpu_freq_to_xtal(int freq, int div)
 {
-    REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_RTC_DREG, g_rtc_dbias_pvt_non_240m);
-    REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_DIG_DREG, g_dig_dbias_pvt_non_240m);
-    esp_rom_delay_us(40);
+    rtc_cpu_freq_config_t cur_config;
+    rtc_clk_cpu_freq_get_config(&cur_config);
+
     ets_update_cpu_frequency(freq);
     /* Set divider from XTAL to APB clock. Need to set divider to 1 (reg. value 0) first. */
     REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_PRE_DIV_CNT, 0);
@@ -507,18 +501,25 @@ void rtc_clk_cpu_freq_to_xtal(int freq, int div)
     /* switch clock source */
     REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_SOC_CLK_SEL, DPORT_SOC_CLK_SEL_XTAL);
     rtc_clk_apb_freq_update(freq * MHZ);
+
+    if (cur_config.freq_mhz == 240) {
+        REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_RTC_DREG, g_rtc_dbias_pvt_non_240m);
+        REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_DIG_DREG, g_dig_dbias_pvt_non_240m);
+        esp_rom_delay_us(40);
+    }
+
     REG_SET_FIELD(RTC_CNTL_DATE_REG, RTC_CNTL_SLAVE_PD,  DEFAULT_LDO_SLAVE);
 }
 
 static void rtc_clk_cpu_freq_to_8m(void)
 {
+    assert(0 && "LDO dbias need to modified");
     ets_update_cpu_frequency(8);
-    REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_RTC_DREG, g_rtc_dbias_pvt_non_240m);
-    REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_DIG_DREG, g_dig_dbias_pvt_non_240m);
-    esp_rom_delay_us(40);
     REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_PRE_DIV_CNT, 0);
     REG_SET_FIELD(SYSTEM_SYSCLK_CONF_REG, SYSTEM_SOC_CLK_SEL, DPORT_SOC_CLK_SEL_8M);
     rtc_clk_apb_freq_update(RTC_FAST_CLK_FREQ_8M);
+    REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_RTC_DREG, g_rtc_dbias_pvt_non_240m);
+    REGI2C_WRITE_MASK(I2C_DIG_REG, I2C_DIG_REG_EXT_DIG_DREG, g_dig_dbias_pvt_non_240m);
     REG_SET_FIELD(RTC_CNTL_DATE_REG, RTC_CNTL_SLAVE_PD,  DEFAULT_LDO_SLAVE);
 }
 
@@ -592,6 +593,25 @@ static bool rtc_clk_set_bbpll_always_on(void)
 #endif
     return is_bbpll_on;
 }
+
+// Workaround for bootloader not calibrated well issue.
+// Placed in IRAM because disabling BBPLL may influence the cache
+void rtc_clk_recalib_bbpll(void)
+{
+    rtc_cpu_freq_config_t old_config;
+    rtc_clk_cpu_freq_get_config(&old_config);
+
+    // There are two paths we arrive here: 1. CPU reset. 2. Other reset reasons.
+    // - For other reasons, the bootloader will set CPU source to BBPLL and enable it. But there are calibration issues.
+    //   Turn off the BBPLL and do calibration again to fix the issue.
+    // - For CPU reset, the CPU source will be set to XTAL, while the BBPLL is kept to meet USB Serial JTAG's
+    //   requirements. In this case, we don't touch BBPLL to avoid USJ disconnection.
+    if (old_config.source == RTC_CPU_FREQ_SRC_PLL) {
+        rtc_clk_cpu_freq_set_xtal();
+        rtc_clk_cpu_freq_set_config(&old_config);
+    }
+}
+
 
 /* Name used in libphy.a:phy_chip_v7.o
  * TODO: update the library to use rtc_clk_xtal_freq_get

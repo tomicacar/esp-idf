@@ -1749,7 +1749,7 @@ Wi-Fi 80211 数据包发送
 |               | 上述建议仅供避免副作用，在有充分理由的情况下可以忽略。                                     |
 +---------------+--------------------------------------------------------------------------------------------+
 | 有 Wi-Fi 连接 | 当 Wi-Fi 已连接，且序列由应用程序控制，应用程序可能会影响整个 Wi-Fi                        |
-|               | 连接的序列控制。 因此，en_sys_seq 要为 true，否则将返回 ESP_ERR_WIFI_ARG。                 |
+|               | 连接的序列控制。 因此，en_sys_seq 要为 true，否则将返回 ESP_ERR_INVALID_ARG。              |
 |               |                                                                                            |
 |               | “无 Wi-Fi 连接” 情况下的 MAC 地址建议也适用于此情况。如果 Wi-Fi                            |
 |               | 模式是 Station 模式，MAC 的地址 1 是 station 所连 AP 的 MAC，地址                          |
@@ -1774,7 +1774,7 @@ Wi-Fi 80211 数据包发送
 |               |                                                                                            |
 |               |  Data 和 Re-Transmission 位应该为 0，否则，Wi-Fi 驱动程序不接受该数据包。                  |
 |               |                                                                                            |
-|               | 如果任何检查失败，将返回 ESP_ERR_WIFI_ARG。                                                |
+|               | 如果任何检查失败，将返回 ESP_ERR_INVALID_ARG。                                             |
 +---------------+--------------------------------------------------------------------------------------------+
 
 Wi-Fi Sniffer 模式
@@ -1792,7 +1792,7 @@ Wi-Fi Sniffer 模式可以通过 :cpp:func:`esp_wifi_set_promiscuous()` 使能�
 
  - 802.11 错误帧，如有 CRC 错误的帧等。
 
-对于Sniffer 模式 **可以** 转储的帧，应用程序可以另外使用 :cpp:func:`esp_wifi_set_promiscuous_filter()` 和 :cpp:func:`esp_wifi_set_promiscuous_ctrl_filter()` 决定筛选哪些特定类型的数据包。应用程序默认筛选所有 802.11 数据和管理帧。
+对于 Sniffer 模式 **可以** 转储的帧，应用程序可以另外使用 :cpp:func:`esp_wifi_set_promiscuous_filter()` 和 :cpp:func:`esp_wifi_set_promiscuous_ctrl_filter()` 决定筛选哪些特定类型的数据包。应用程序默认筛选所有 802.11 数据和管理帧。如果你想要筛选 802.11 控制帧，:cpp:func:`esp_wifi_set_promiscuous_filter()` 中的 filter 参数需要包含 “WIFI_PROMIS_FILTER_MASK_CTRL” 类型， 如果你想进一步区分 802.11 控制帧，那么调用 :cpp:func:`esp_wifi_set_promiscuous_ctrl_filter()`。
 
 可以在 WIFI_MODE_NULL、WIFI_MODE_STA、WIFI_MODE_AP、WIFI_MODE_APSTA 等Wi-Fi 模式下使能 Wi-Fi Sniffer 模式。也就是说，当 station 连接到 AP，或者 AP 有 Wi-Fi 连接时，就可以使能。请注意，Sniffer 模式对 station/AP Wi-Fi 连接的吞吐量有 **很大影响**。通常，除非有特别原因，当 station/AP Wi-Fi 连接出现大量流量，不应使能。
 

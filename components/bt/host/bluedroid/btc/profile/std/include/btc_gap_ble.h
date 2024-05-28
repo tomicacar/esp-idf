@@ -1,16 +1,8 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #ifndef __BTC_GAP_BLE_H__
 #define __BTC_GAP_BLE_H__
@@ -26,7 +18,7 @@ extern tBTA_BLE_ADV_DATA *gl_bta_scan_rsp_data_ptr;
 #define gl_bta_scan_rsp_data    (*gl_bta_scan_rsp_data_ptr)
 #endif
 
-#define BLE_ISVALID_PARAM(x, min, max)  (((x) >= (min) && (x) <= (max)) || ((x) == ESP_BLE_CONN_PARAM_UNDEF))
+#define BLE_ISVALID_PARAM(x, min, max)  (((x) >= (min) && (x) <= (max)))
 
 typedef enum {
 #if (BLE_42_FEATURE_SUPPORT == TRUE)
@@ -62,6 +54,8 @@ typedef enum {
     BTC_GAP_BLE_DISCONNECT_EVT,
     BTC_GAP_BLE_REMOVE_BOND_DEV_EVT,
     BTC_GAP_BLE_OOB_REQ_REPLY_EVT,
+    BTC_GAP_BLE_SC_OOB_REQ_REPLY_EVT,
+    BTC_GAP_BLE_SC_CR_OOB_DATA_EVT,
     BTC_GAP_BLE_UPDATE_DUPLICATE_SCAN_EXCEPTIONAL_LIST,
     BTC_GAP_BLE_SET_AFH_CHANNELS,
 #if (BLE_50_FEATURE_SUPPORT == TRUE)
@@ -90,8 +84,27 @@ typedef enum {
     BTC_GAP_BLE_START_EXT_SCAN,
     BTC_GAP_BLE_STOP_EXT_SCAN,
     BTC_GAP_BLE_SET_EXT_PEFER_CONNET_PARAMS,
+    BTC_GAP_BLE_DTM_ENH_TX_START,
+    BTC_GAP_BLE_DTM_ENH_RX_START,
 #endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
     BTC_GAP_BLE_ACT_GET_DEV_NAME,
+#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+    BTC_GAP_BLE_PERIODIC_ADV_RECV_ENABLE,
+    BTC_GAP_BLE_PERIODIC_ADV_SYNC_TRANS,
+    BTC_GAP_BLE_PERIODIC_ADV_SET_INFO_TRANS,
+    BTC_GAP_BLE_SET_PERIODIC_ADV_SYNC_TRANS_PARAMS,
+#endif //#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+#if (BLE_42_FEATURE_SUPPORT == TRUE)
+    BTC_GAP_BLE_DTM_TX_START,
+    BTC_GAP_BLE_DTM_RX_START,
+#endif // #if (BLE_42_FEATURE_SUPPORT == TRUE)
+    BTC_GAP_BLE_DTM_STOP,
+#if (BLE_42_FEATURE_SUPPORT == TRUE)
+    BTC_GAP_BLE_ACT_CLEAR_ADV,
+#endif // #if (BLE_42_FEATURE_SUPPORT == TRUE)
+    BTC_GAP_BLE_ACT_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT,
+    BTC_GAP_BLE_ACT_ADD_DEVICE_TO_RESOLVING_LIST,
+    BTC_GAP_BLE_ACT_VENDOR_HCI_CMD_EVT,
 } btc_gap_ble_act_t;
 
 /* btc_ble_gap_args_t */
@@ -129,6 +142,16 @@ typedef union {
     struct set_rand_addr_args {
         esp_bd_addr_t rand_addr;
     } set_rand_addr;
+    // BTC_GAP_BLE_ACT_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT
+    struct set_rpa_timeout_args {
+        uint16_t rpa_timeout;
+    } set_rpa_timeout;
+    //BTC_GAP_BLE_ACT_ADD_DEVICE_TO_RESOLVING_LIST
+    struct add_dev_to_resolving_list_args {
+        esp_bd_addr_t addr;
+        uint8_t addr_type;
+        uint8_t irk[PEER_IRK_LEN];
+    } add_dev_to_resolving_list;
     //BTC_GAP_BLE_ACT_CONFIG_LOCAL_PRIVACY,
     struct cfg_local_privacy_args {
         bool privacy_enable;
@@ -209,6 +232,11 @@ typedef union {
         uint8_t len;
         uint8_t *p_value;
     } oob_req_reply;
+    struct sc_oob_req_reply_args {
+        esp_bd_addr_t bd_addr;
+        uint8_t *p_c;
+        uint8_t *p_r;
+    } sc_oob_req_reply;
     //BTC_GAP_BLE_DISCONNECT_EVT
     struct disconnect_args {
         esp_bd_addr_t remote_device;
@@ -225,6 +253,20 @@ typedef union {
     struct set_channels_args {
        esp_gap_ble_channels channels;
     } set_channels;
+    struct dtm_tx_start_args {
+        uint8_t tx_channel;
+        uint8_t len_of_data;
+        uint8_t pkt_payload;
+    } dtm_tx_start;
+    struct dtm_rx_start_args {
+        uint8_t rx_channel;
+    } dtm_rx_start;
+    //BTC_DEV_VENDOR_HCI_CMD_EVT
+    struct vendor_cmd_send_args {
+        uint16_t  opcode;
+        uint8_t  param_len;
+        uint8_t *p_param_buf;
+    } vendor_cmd_send;
 } btc_ble_gap_args_t;
 #if (BLE_50_FEATURE_SUPPORT == TRUE)
 
@@ -291,9 +333,11 @@ typedef union {
         uint8_t instance;
         uint16_t len;
         uint8_t *data;
+        bool only_update_did;
     } periodic_adv_cfg_data;
 
     struct periodic_adv_start_args {
+        bool    include_adi;
         uint8_t instance;
     } periodic_adv_start;
 
@@ -343,6 +387,40 @@ typedef union {
         esp_bd_addr_t peer_addr;
     } ext_conn;
 
+#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+    struct periodic_adv_recv_en_args {
+        uint16_t sync_handle;
+        uint8_t enable;
+    } periodic_adv_recv_en;
+
+    struct periodic_adv_sync_trans_args {
+        esp_bd_addr_t addr;
+        uint16_t service_data;
+        uint16_t sync_handle;
+    } periodic_adv_sync_trans;
+
+    struct periodic_adv_set_info_trans_args {
+        esp_bd_addr_t addr;
+        uint16_t service_data;
+        uint16_t adv_handle;
+    } periodic_adv_set_info_trans;
+
+    struct set_periodic_adv_sync_trans_params_args {
+        esp_bd_addr_t addr;
+        esp_ble_gap_past_params_t params;
+    } set_periodic_adv_sync_trans_params;
+#endif
+     struct dtm_enh_tx_start_args {
+        uint8_t tx_channel;
+        uint8_t len_of_data;
+        uint8_t pkt_payload;
+        uint8_t phy;
+    } dtm_enh_tx_start;
+    struct dtm_enh_rx_start_args {
+        uint8_t rx_channel;
+        uint8_t phy;
+        uint8_t modulation_index;
+    } dtm_enh_rx_start;
 } btc_ble_5_gap_args_t;
 #endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
 

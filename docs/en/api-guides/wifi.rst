@@ -1831,7 +1831,7 @@ Theoretically, if the side-effects the API imposes on the Wi-Fi driver or other 
        The recommendations above are only for avoiding side-effects and can be ignored when there are good reasons.
 
    * - Have Wi-Fi connection
-     - When the Wi-Fi connection is already set up, and the sequence is controlled by the application, the latter may impact the sequence control of the Wi-Fi connection as a whole. So, the en_sys_seq need to be true, otherwise ESP_ERR_WIFI_ARG is returned.
+     - When the Wi-Fi connection is already set up, and the sequence is controlled by the application, the latter may impact the sequence control of the Wi-Fi connection as a whole. So, the ``en_sys_seq`` need to be true, otherwise ``ESP_ERR_INVALID_ARG`` is returned.
 
        The MAC-address recommendations in the “No Wi-Fi connection” scenario also apply to this scenario.
 
@@ -1843,7 +1843,7 @@ Theoretically, if the side-effects the API imposes on the Wi-Fi driver or other 
 
        - If the packet is sent from station to AP or from AP to station, the Power Management, More Data, and Re-Transmission bits should be 0. Otherwise, the packet will be discarded by Wi-Fi driver.
 
-       ESP_ERR_WIFI_ARG is returned if any check fails.
+       ``ESP_ERR_INVALID_ARG`` is returned if any check fails.
 
 
 Wi-Fi Sniffer Mode
@@ -1860,7 +1860,7 @@ The following packets will **NOT** be dumped to the application:
 
  - 802.11 error frame, such as the frame with a CRC error, etc.
 
-For frames that the sniffer **can** dump, the application can additionally decide which specific type of packets can be filtered to the application by using :cpp:func:`esp_wifi_set_promiscuous_filter()` and :cpp:func:`esp_wifi_set_promiscuous_ctrl_filter()`. By default, it will filter all 802.11 data and management frames to the application.
+For frames that the sniffer **can** dump, the application can additionally decide which specific type of packets can be filtered to the application by using :cpp:func:`esp_wifi_set_promiscuous_filter()` and :cpp:func:`esp_wifi_set_promiscuous_ctrl_filter()`. By default, it will filter all 802.11 data and management frames to the application. If you want to filter the 802.11 control frames, the filter parameter in :cpp:func:`esp_wifi_set_promiscuous_filter()` should include `WIFI_PROMIS_FILTER_MASK_CTRL` type, and if you want to differentiate control frames further, then call :cpp:func:`esp_wifi_set_promiscuous_ctrl_filter()`.
 
 The Wi-Fi sniffer mode can be enabled in the Wi-Fi mode of WIFI_MODE_NULL, or WIFI_MODE_STA, or WIFI_MODE_AP, or WIFI_MODE_APSTA. In other words, the sniffer mode is active when the station is connected to the AP, or when the AP has a Wi-Fi connection. Please note that the sniffer has a **great impact** on the throughput of the station or AP Wi-Fi connection. Generally, we should **NOT** enable the sniffer, when the station/AP Wi-Fi connection experiences heavy traffic unless we have special reasons.
 

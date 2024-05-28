@@ -1,16 +1,8 @@
-// Copyright 2019 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -187,6 +179,9 @@ esp_err_t esp_bt_hf_volume_control(esp_bd_addr_t remote_addr, esp_hf_volume_cont
     if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (volume < 0 || volume > 15) {
+        return ESP_ERR_INVALID_ARG;
+    }
     btc_msg_t msg;
     msg.sig = BTC_SIG_API_CALL;
     msg.pid = BTC_PID_HF;
@@ -253,6 +248,9 @@ esp_err_t esp_bt_hf_indchange_notification(esp_bd_addr_t remote_addr,
     if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (signal < 0 || signal > 5) {
+        return ESP_ERR_INVALID_ARG;
+    }
     btc_msg_t msg;
     msg.sig = BTC_SIG_API_CALL;
     msg.pid = BTC_PID_HF;
@@ -280,6 +278,10 @@ esp_err_t esp_bt_hf_cind_response(esp_bd_addr_t remote_addr,
     if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (signal < 0 || signal > 5 || batt_lev < 0 || batt_lev > 5) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
     btc_msg_t msg;
     msg.sig = BTC_SIG_API_CALL;
     msg.pid = BTC_PID_HF;
@@ -353,10 +355,13 @@ esp_err_t esp_bt_hf_clcc_response(esp_bd_addr_t remote_addr, int index, esp_hf_c
     return (stat == BT_STATUS_SUCCESS) ? ESP_OK : ESP_FAIL;
 }
 
-esp_err_t esp_bt_hf_cnum_response(esp_bd_addr_t remote_addr, char *number, esp_hf_subscriber_service_type_t type)
+esp_err_t esp_bt_hf_cnum_response(esp_bd_addr_t remote_addr, char *number, int number_type, esp_hf_subscriber_service_type_t service_type)
 {
     if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
         return ESP_ERR_INVALID_STATE;
+    }
+    if (number == NULL || number_type < 128 || number_type > 175) {
+        return ESP_ERR_INVALID_ARG;
     }
     btc_msg_t msg;
     msg.sig = BTC_SIG_API_CALL;
@@ -367,7 +372,8 @@ esp_err_t esp_bt_hf_cnum_response(esp_bd_addr_t remote_addr, char *number, esp_h
     memset(&arg, 0, sizeof(btc_hf_args_t));
     memcpy(&(arg.cnum_rep), remote_addr, sizeof(esp_bd_addr_t));
     arg.cnum_rep.number = number; //deep_copy
-    arg.cnum_rep.type = type;
+    arg.cnum_rep.number_type = number_type;
+    arg.cnum_rep.service_type = service_type;
 
     /* Switch to BTC context */
     bt_status_t status = btc_transfer_context(&msg, &arg, sizeof(btc_hf_args_t),
@@ -528,10 +534,30 @@ esp_err_t esp_bt_hf_register_data_callback(esp_hf_incoming_data_cb_t recv, esp_h
 }
 
 #if (BTM_SCO_HCI_INCLUDED == TRUE)
+esp_err_t esp_hf_ag_pkt_stat_nums_get(uint16_t sync_conn_handle)
+{
+    if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    btc_msg_t msg;
+    msg.sig = BTC_SIG_API_CALL;
+    msg.pid = BTC_PID_HF;
+    msg.act = BTC_HF_REQUEST_PKT_STAT_EVT;
+
+    btc_hf_args_t arg;
+    memset(&arg, 0, sizeof(btc_hf_args_t));
+    arg.pkt_sync_hd.sync_conn_handle = sync_conn_handle;
+
+    /* Switch to BTC context */
+    bt_status_t status = btc_transfer_context(&msg, &arg, sizeof(btc_hf_args_t), NULL, NULL);
+    return (status == BT_STATUS_SUCCESS) ? ESP_OK : ESP_FAIL;
+}
+
 void esp_hf_outgoing_data_ready(void)
 {
     btc_hf_ci_sco_data();
 }
-#endif /* #if (BTM_SCO_HCI_INCLUDED == TRUE ) */
+#endif /* #if (BTM_SCO_HCI_INCLUDED == TRUE) */
 
 #endif // BTC_HF_INCLUDED

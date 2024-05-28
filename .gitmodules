@@ -34,12 +34,12 @@
 [submodule "components/bootloader/subproject/components/micro-ecc/micro-ecc"]
 	path = components/bootloader/subproject/components/micro-ecc/micro-ecc
 	url = ../../kmackay/micro-ecc.git
-	sbom-version = 1.0
+	sbom-version = 1.1
 	sbom-cpe = cpe:2.3:a:micro-ecc_project:micro-ecc:{}:*:*:*:*:*:*:*
 	sbom-supplier = Person: Ken MacKay
 	sbom-url = https://github.com/kmackay/micro-ecc
 	sbom-description = A small and fast ECDH and ECDSA implementation for 8-bit, 32-bit, and 64-bit processors
-	sbom-hash = d037ec89546fad14b5c4d5456c2e23a71e554966
+	sbom-hash = 24c60e243580c7868f4334a1ba3123481fe1aa48
 
 [submodule "components/coap/libcoap"]
 	path = components/coap/libcoap
@@ -65,12 +65,12 @@
 [submodule "components/json/cJSON"]
 	path = components/json/cJSON
 	url = ../../DaveGamble/cJSON.git
-	sbom-version = 1.7.15
+	sbom-version = 1.7.17
 	sbom-cpe = cpe:2.3:a:cjson_project:cjson:{}:*:*:*:*:*:*:*
 	sbom-supplier = Person: Dave Gamble
 	sbom-url = https://github.com/DaveGamble/cJSON
 	sbom-description = Ultralightweight JSON parser in ANSI C
-	sbom-hash = d348621ca93571343a56862df7de4ff3bc9b5667
+	sbom-hash = 87d8f0961a01bf09bef98ff89bae9fdec42181ee
 
 [submodule "components/mbedtls/mbedtls"]
 	path = components/mbedtls/mbedtls

@@ -304,8 +304,7 @@ config BT_NIMBLE_RPA_TIMEOUT
     depends on BT_NIMBLE_ENABLED
     default 900
     help
-        Time interval between RPA address change. This is applicable in case of
-        Host based RPA
+        Time interval between RPA address change.
 
 menuconfig BT_NIMBLE_MESH
     bool "Enable BLE mesh functionality"
@@ -424,7 +423,7 @@ config BT_NIMBLE_HS_STOP_TIMEOUT_MS
 config BT_NIMBLE_HOST_BASED_PRIVACY
     bool "Enable host based privacy for random address."
     default n
-    depends on BT_NIMBLE_ENABLED && !IDF_TARGET_ESP32
+    depends on BT_NIMBLE_ENABLED && IDF_TARGET_ESP32
     help
         Use this option to do host based Random Private Address resolution.
         If this option is disabled then controller based privacy is used.
@@ -439,7 +438,7 @@ config BT_NIMBLE_ENABLE_CONN_REATTEMPT
 
 config BT_NIMBLE_MAX_CONN_REATTEMPT
     int "Maximum number connection reattempts"
-    range 1 7
+    range 1 255
     default 3
     depends on BT_NIMBLE_ENABLED && BT_NIMBLE_ENABLE_CONN_REATTEMPT
     help
@@ -518,4 +517,10 @@ config BT_NIMBLE_HIGH_DUTY_ADV_ITVL
     bool "Enable BLE high duty advertising interval feature"
     depends on BT_NIMBLE_ENABLED
     help
-        This enable BLE high duty advertising interval feature
+        This enables BLE high duty advertising interval feature
+
+config BT_NIMBLE_VS_SUPPORT
+    bool "Enable support for VSC and VSE"
+    help
+        This option is used to enable support for sending Vendor Specific HCI commands and handling
+        Vendor Specific HCI Events.

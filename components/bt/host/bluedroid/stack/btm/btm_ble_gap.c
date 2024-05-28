@@ -1000,7 +1000,7 @@ uint32_t BTM_BleUpdateOwnType(uint8_t *own_bda_type, tBTM_START_ADV_CMPL_CBACK *
             memcpy(btm_cb.ble_ctr_cb.addr_mgnt_cb.private_addr, btm_cb.ble_ctr_cb.addr_mgnt_cb.resolvale_addr, BD_ADDR_LEN);
             btsnd_hcic_ble_set_random_addr(btm_cb.ble_ctr_cb.addr_mgnt_cb.resolvale_addr);
         }else {
-            BTM_TRACE_ERROR ("No random address yet, please set random address and try\n");
+            BTM_TRACE_ERROR ("No random address yet, please set random address using API \"esp_ble_gap_set_rand_addr\" and retry\n");
             if(cb) {
                 (* cb)(HCI_ERR_ESP_VENDOR_FAIL);
             }
@@ -1049,17 +1049,28 @@ uint32_t BTM_BleUpdateOwnType(uint8_t *own_bda_type, tBTM_START_ADV_CMPL_CBACK *
 #else
 uint32_t BTM_BleUpdateOwnType(uint8_t *own_bda_type, tBTM_START_ADV_CMPL_CBACK *cb)
 {
+    tBTM_LE_RANDOM_CB *p_cb = &btm_cb.ble_ctr_cb.addr_mgnt_cb;
+
     if((*own_bda_type == BLE_ADDR_RANDOM) || (*own_bda_type == BLE_ADDR_RANDOM_ID)) {
-        if((btm_cb.ble_ctr_cb.addr_mgnt_cb.exist_addr_bit & BTM_BLE_GAP_ADDR_BIT_RANDOM) != BTM_BLE_GAP_ADDR_BIT_RANDOM) {
+        if((p_cb->exist_addr_bit & BTM_BLE_GAP_ADDR_BIT_RANDOM) != BTM_BLE_GAP_ADDR_BIT_RANDOM) {
             BTM_TRACE_ERROR("No random address yet, please set random address and try\n");
             if(cb) {
                 (* cb)(HCI_ERR_ESP_VENDOR_FAIL);
             }
             return BTM_ILLEGAL_VALUE;
         }
+
+        // If a device is using RPA, it shall also have an Identity Address
+        if ((*own_bda_type == BLE_ADDR_RANDOM_ID) && BTM_BLE_IS_NON_RESLVE_BDA(p_cb->static_rand_addr)) {
+            BTM_TRACE_ERROR("No identity address yet, please set static random address and try\n");
+            if (cb) {
+                (* cb)(HCI_ERR_ESP_VENDOR_FAIL);
+            }
+            return BTM_ILLEGAL_VALUE;
+        }
     }
 
-    btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type = *own_bda_type;
+    p_cb->own_addr_type = *own_bda_type;
 
     return BTM_SUCCESS;
 }
@@ -1322,7 +1333,7 @@ tBTM_STATUS BTM_BleSetConnectableMode(tBTM_BLE_CONN_MODE connectable_mode)
 **
 ** Function         btm_set_conn_mode_adv_init_addr
 **
-** Description      set initator address type and local address type based on adv
+** Description      set initiator address type and local address type based on adv
 **                  mode.
 **
 **
@@ -1990,7 +2001,7 @@ tBTM_STATUS BTM_BleSetRandAddress(BD_ADDR rand_addr)
     }
 
     if (btm_cb.ble_ctr_cb.inq_var.state != BTM_BLE_IDLE) {
-        BTM_TRACE_ERROR("Advertising or scaning now, can't set randaddress %d", btm_cb.ble_ctr_cb.inq_var.state);
+        BTM_TRACE_ERROR("Advertising or scanning now, can't set randaddress %d", btm_cb.ble_ctr_cb.inq_var.state);
         return BTM_SET_STATIC_RAND_ADDR_FAIL;
     }
     memcpy(btm_cb.ble_ctr_cb.addr_mgnt_cb.private_addr, rand_addr, BD_ADDR_LEN);
@@ -2019,7 +2030,7 @@ void BTM_BleClearRandAddress(void)
 {
     tBTM_BLE_CB  *p_cb = &btm_cb.ble_ctr_cb;
     if (btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type == BLE_ADDR_RANDOM && (p_cb->inq_var.state != BTM_BLE_IDLE)) {
-        BTM_TRACE_ERROR("Advertising or scaning now, can't restore public address ");
+        BTM_TRACE_ERROR("Advertising or scanning now, can't restore public address ");
         return;
     }
     memset(btm_cb.ble_ctr_cb.addr_mgnt_cb.static_rand_addr, 0, BD_ADDR_LEN);
@@ -2079,7 +2090,7 @@ UINT8 *BTM_CheckAdvData( UINT8 *p_adv, UINT8 type, UINT8 *p_length)
 
     STREAM_TO_UINT8(length, p);
 
-    while ( length && (p - p_adv <= BTM_BLE_CACHE_ADV_DATA_MAX)) {
+    while ( length && (p - p_adv < BTM_BLE_CACHE_ADV_DATA_MAX)) {
         STREAM_TO_UINT8(adv_type, p);
 
         if ( adv_type == type ) {
@@ -2087,7 +2098,15 @@ UINT8 *BTM_CheckAdvData( UINT8 *p_adv, UINT8 type, UINT8 *p_length)
             *p_length = length - 1; /* minus the length of type */
             return p;
         }
+
         p += length - 1; /* skip the length of data */
+
+        /* Break loop if advertising data is in an incorrect format,
+           as it may lead to memory overflow */
+        if (p >= p_adv + BTM_BLE_CACHE_ADV_DATA_MAX) {
+            break;
+        }
+
         STREAM_TO_UINT8(length, p);
     }
 
@@ -2218,9 +2237,10 @@ UINT8 *btm_ble_build_adv_data(tBTM_BLE_AD_MASK *p_data_mask, UINT8 **p_dst,
 #if BTM_MAX_LOC_BD_NAME_LEN > 0
         if (len > MIN_ADV_LENGTH && data_mask & BTM_BLE_AD_BIT_DEV_NAME) {
             if (strlen(btm_cb.cfg.bd_name) > (UINT16)(len - MIN_ADV_LENGTH)) {
-                *p++ = len - MIN_ADV_LENGTH + 1;
+                cp_len = (UINT16)(len - MIN_ADV_LENGTH);
+                *p++ = cp_len + 1;
                 *p++ = BTM_BLE_AD_TYPE_NAME_SHORT;
-                ARRAY_TO_STREAM(p, btm_cb.cfg.bd_name, len - MIN_ADV_LENGTH);
+                ARRAY_TO_STREAM(p, btm_cb.cfg.bd_name, cp_len);
             } else {
                 cp_len = (UINT16)strlen(btm_cb.cfg.bd_name);
                 *p++ = cp_len + 1;
@@ -3271,6 +3291,7 @@ static void btm_ble_appearance_to_cod(UINT16 appearance, UINT8 *dev_class)
     case BTM_BLE_APPEARANCE_CYCLING_CADENCE:
     case BTM_BLE_APPEARANCE_CYCLING_POWER:
     case BTM_BLE_APPEARANCE_CYCLING_SPEED_CADENCE:
+    case BTM_BLE_APPEARANCE_STANDALONE_SPEAKER:
     case BTM_BLE_APPEARANCE_GENERIC_OUTDOOR_SPORTS:
     case BTM_BLE_APPEARANCE_OUTDOOR_SPORTS_LOCATION:
     case BTM_BLE_APPEARANCE_OUTDOOR_SPORTS_LOCATION_AND_NAV:
@@ -3343,7 +3364,11 @@ BOOLEAN btm_ble_update_inq_result(BD_ADDR bda, tINQ_DB_ENT *p_i, UINT8 addr_type
     if (evt_type != BTM_BLE_SCAN_RSP_EVT) {
         p_cur->ble_evt_type     = evt_type;
     }
-
+#if BTM_BLE_ACTIVE_SCAN_REPORT_ADV_SCAN_RSP_INDIVIDUALLY
+    if (evt_type == BTM_BLE_SCAN_RSP_EVT) {
+        p_cur->ble_evt_type = evt_type;
+    }
+#endif
     p_i->inq_count = p_inq->inq_counter;   /* Mark entry for current inquiry */
 
     if (p_le_inq_cb->adv_len != 0) {
@@ -3704,7 +3729,7 @@ static void btm_ble_process_adv_pkt_cont(BD_ADDR bda, UINT8 addr_type, UINT8 evt
         /* never been report as an LE device */
         if (p_i &&
                 (!(p_i->inq_info.results.device_type & BT_DEVICE_TYPE_BLE) ||
-                 /* scan repsonse to be updated */
+                 /* scan response to be updated */
                  (!p_i->scan_rsp))) {
             update = TRUE;
         } else if (BTM_BLE_IS_DISCO_ACTIVE(btm_cb.ble_ctr_cb.scan_activity)) {
@@ -3978,7 +4003,7 @@ static void btm_ble_stop_discover(void)
 **
 ** Description      Set or clear adv states in topology mask
 **
-** Returns          operation status. TRUE if sucessful, FALSE otherwise.
+** Returns          operation status. TRUE if successful, FALSE otherwise.
 **
 *******************************************************************************/
 typedef BOOLEAN (BTM_TOPOLOGY_FUNC_PTR)(tBTM_BLE_STATE_MASK);
@@ -4239,7 +4264,7 @@ void btm_ble_timeout(TIMER_LIST_ENT *p_tle)
         break;
 
     case BTU_TTYPE_BLE_GAP_LIM_DISC:
-        /* lim_timeout expiried, limited discovery should exit now */
+        /* lim_timeout expired, limited discovery should exit now */
         btm_cb.btm_inq_vars.discoverable_mode &= ~BTM_BLE_LIMITED_DISCOVERABLE;
         btm_ble_set_adv_flag(btm_cb.btm_inq_vars.connectable_mode, btm_cb.btm_inq_vars.discoverable_mode);
         break;
@@ -4655,6 +4680,51 @@ BOOLEAN BTM_Ble_Authorization(BD_ADDR bd_addr, BOOLEAN authorize)
 
     BTM_TRACE_ERROR("Authorization fail");
     return FALSE;
+}
+
+/*******************************************************************************
+**
+** Function         BTM_BleClearAdv
+**
+** Description      This function is called to clear legacy advertising
+**
+** Parameter        p_clear_adv_cback - Command complete callback
+**
+*******************************************************************************/
+BOOLEAN BTM_BleClearAdv(tBTM_CLEAR_ADV_CMPL_CBACK *p_clear_adv_cback)
+{
+    tBTM_BLE_CB *p_cb = &btm_cb.ble_ctr_cb;
+
+    if (btsnd_hcic_ble_clear_adv() == FALSE) {
+        BTM_TRACE_ERROR("%s: Unable to Clear Advertising", __FUNCTION__);
+        return FALSE;
+    }
+
+    p_cb->inq_var.p_clear_adv_cb = p_clear_adv_cback;
+    return TRUE;
+}
+BOOLEAN BTM_BleSetRpaTimeout(uint16_t rpa_timeout,tBTM_SET_RPA_TIMEOUT_CMPL_CBACK *p_set_rpa_timeout_cback)
+{
+    if ((btsnd_hcic_ble_set_rand_priv_addr_timeout(rpa_timeout)) != TRUE) {
+        BTM_TRACE_ERROR("Set RPA Timeout error, rpa_timeout:0x%04x",rpa_timeout);
+        return FALSE;
+    }
+    btm_cb.devcb.p_ble_set_rpa_timeout_cmpl_cb = p_set_rpa_timeout_cback;
+    return TRUE;
+}
+
+BOOLEAN BTM_BleAddDevToResolvingList(BD_ADDR addr,
+                                      uint8_t addr_type,
+                                      uint8_t irk[],
+                                      tBTM_ADD_DEV_TO_RESOLVING_LIST_CMPL_CBACK *p_add_dev_to_resolving_list_callback)
+{
+    UINT8 *local_irk = btm_cb.devcb.id_keys.irk;
+    if ((btsnd_hcic_ble_add_device_resolving_list(addr_type, addr, irk, local_irk)) != TRUE) {
+        BTM_TRACE_ERROR("Add device to resolving list error");
+        return FALSE;
+    }
+    btm_cb.devcb.p_add_dev_to_resolving_list_cmpl_cb = p_add_dev_to_resolving_list_callback;
+    return TRUE;
 }
 
 bool btm_ble_adv_pkt_ready(void)

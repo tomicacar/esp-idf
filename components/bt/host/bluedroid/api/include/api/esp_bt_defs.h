@@ -1,16 +1,8 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #ifndef __ESP_BT_DEFS_H__
 #define __ESP_BT_DEFS_H__
@@ -27,7 +19,7 @@ extern "C" {
         return ESP_ERR_INVALID_STATE;                \
     }
 
-#define ESP_BT_STATUS_BASE_FOR_HCI_ERR  0X0100  /* base for coverting HCI error code to ESP status */
+#define ESP_BT_STATUS_BASE_FOR_HCI_ERR  0X0100  /* base for converting HCI error code to ESP status */
 
 /* relate to BT_STATUS_xxx in bt_def.h */
 /// Status Return Value
@@ -133,18 +125,20 @@ typedef uint8_t esp_link_key[ESP_BT_OCTET16_LEN];      /* Link Key */
 /// Default GATT interface id
 #define ESP_DEFAULT_GATT_IF             0xff
 
+#if BLE_HIGH_DUTY_ADV_INTERVAL
+#define ESP_BLE_PRIM_ADV_INT_MIN            0x000008     /*!< Minimum advertising interval for undirected and low duty cycle directed advertising */
+#else
 #define ESP_BLE_PRIM_ADV_INT_MIN            0x000020     /*!< Minimum advertising interval for undirected and low duty cycle directed advertising */
+#endif
 #define ESP_BLE_PRIM_ADV_INT_MAX            0xFFFFFF     /*!< Maximum advertising interval for undirected and low duty cycle directed advertising */
 #define ESP_BLE_CONN_INT_MIN                0x0006       /*!< relate to BTM_BLE_CONN_INT_MIN in stack/btm_ble_api.h */
 #define ESP_BLE_CONN_INT_MAX                0x0C80       /*!< relate to BTM_BLE_CONN_INT_MAX in stack/btm_ble_api.h */
 #define ESP_BLE_CONN_LATENCY_MAX            499          /*!< relate to ESP_BLE_CONN_LATENCY_MAX in stack/btm_ble_api.h */
 #define ESP_BLE_CONN_SUP_TOUT_MIN           0x000A       /*!< relate to BTM_BLE_CONN_SUP_TOUT_MIN in stack/btm_ble_api.h */
 #define ESP_BLE_CONN_SUP_TOUT_MAX           0x0C80       /*!< relate to ESP_BLE_CONN_SUP_TOUT_MAX in stack/btm_ble_api.h */
-#define ESP_BLE_CONN_PARAM_UNDEF            0xffff       /* use this value when a specific value not to be overwritten */ /* relate to ESP_BLE_CONN_PARAM_UNDEF in stack/btm_ble_api.h */
-#define ESP_BLE_SCAN_PARAM_UNDEF            0xffffffff   /* relate to ESP_BLE_SCAN_PARAM_UNDEF in stack/btm_ble_api.h */
 
 /// Check the param is valid or not
-#define ESP_BLE_IS_VALID_PARAM(x, min, max)  (((x) >= (min) && (x) <= (max)) || ((x) == ESP_BLE_CONN_PARAM_UNDEF))
+#define ESP_BLE_IS_VALID_PARAM(x, min, max)  (((x) >= (min) && (x) <= (max)) )
 
 /// UUID type
 typedef struct {
@@ -169,15 +163,18 @@ typedef enum {
 /// Bluetooth address length
 #define ESP_BD_ADDR_LEN     6
 
+/// Bluetooth peer irk
+#define ESP_PEER_IRK_LEN    16
+
 /// Bluetooth device address
 typedef uint8_t esp_bd_addr_t[ESP_BD_ADDR_LEN];
 
 /// BLE device address type
 typedef enum {
-    BLE_ADDR_TYPE_PUBLIC        = 0x00,
-    BLE_ADDR_TYPE_RANDOM        = 0x01,
-    BLE_ADDR_TYPE_RPA_PUBLIC    = 0x02,
-    BLE_ADDR_TYPE_RPA_RANDOM    = 0x03,
+    BLE_ADDR_TYPE_PUBLIC        = 0x00,     /*!< Public Device Address */
+    BLE_ADDR_TYPE_RANDOM        = 0x01,     /*!< Random Device Address. To set this address, use the function esp_ble_gap_set_rand_addr(esp_bd_addr_t rand_addr) */
+    BLE_ADDR_TYPE_RPA_PUBLIC    = 0x02,     /*!< Resolvable Private Address (RPA) with public identity address */
+    BLE_ADDR_TYPE_RPA_RANDOM    = 0x03,     /*!< Resolvable Private Address (RPA) with random identity address. To set this address, use the function esp_ble_gap_set_rand_addr(esp_bd_addr_t rand_addr) */
 } esp_ble_addr_type_t;
 
 /// white list address type

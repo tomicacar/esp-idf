@@ -25,23 +25,28 @@
  *  http://csrc.nist.gov/encryption/aes/rijndael/Rijndael.pdf
  *  http://csrc.nist.gov/publications/fips/fips197/fips-197.pdf
  */
-
-#include "soc/soc_caps.h"
-
-#if SOC_AES_SUPPORT_GCM
+#include <string.h>
 
 #include "aes/esp_aes.h"
 #include "aes/esp_aes_gcm.h"
 #include "aes/esp_aes_internal.h"
 #include "hal/aes_hal.h"
 
-#include "esp_log.h"
 #include "mbedtls/aes.h"
+#include "mbedtls/error.h"
+#include "mbedtls/gcm.h"
+#include "mbedtls/platform.h"
+
 #include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "soc/soc_caps.h"
 #include "soc/soc_memory_layout.h"
 
-#include "mbedtls/error.h"
-#include <string.h>
+#include "sdkconfig.h"
+
+#if SOC_AES_SUPPORT_DMA
+#include "esp_aes_dma_priv.h"
+#endif
 
 #define ESP_PUT_BE64(a, val)                                    \
     do {                                                        \
@@ -326,6 +331,10 @@ void esp_aes_gcm_init( esp_gcm_context *ctx)
 
     bzero(ctx, sizeof(esp_gcm_context));
 
+#if SOC_AES_SUPPORT_DMA && CONFIG_MBEDTLS_AES_USE_INTERRUPT
+    esp_aes_intr_alloc();
+#endif
+
     ctx->gcm_state = ESP_AES_GCM_STATE_INIT;
 }
 
@@ -382,6 +391,7 @@ int esp_aes_gcm_starts( esp_gcm_context *ctx,
     /* H and the lookup table are only generated once per ctx */
     if (ctx->gcm_state == ESP_AES_GCM_STATE_INIT) {
         /* Lock the AES engine to calculate ghash key H in hardware */
+#if CONFIG_MBEDTLS_HARDWARE_GCM
         esp_aes_acquire_hardware();
         ctx->aes_ctx.key_in_hardware = aes_hal_setkey(ctx->aes_ctx.key, ctx->aes_ctx.key_bytes, mode);
         aes_hal_mode_init(ESP_AES_BLOCK_MODE_GCM);
@@ -389,6 +399,10 @@ int esp_aes_gcm_starts( esp_gcm_context *ctx,
         aes_hal_gcm_calc_hash(ctx->H);
 
         esp_aes_release_hardware();
+#else
+        memset(ctx->H, 0, sizeof(ctx->H));
+        esp_aes_crypt_ecb(&ctx->aes_ctx, MBEDTLS_AES_ENCRYPT, ctx->H, ctx->H);
+#endif
         gcm_gen_table(ctx);
     }
 
@@ -494,6 +508,7 @@ int esp_aes_gcm_finish( esp_gcm_context *ctx,
     return esp_aes_crypt_ctr(&ctx->aes_ctx, tag_len, &nc_off, ctx->ori_j0, stream, ctx->ghash, tag);
 }
 
+#if CONFIG_MBEDTLS_HARDWARE_GCM
 /* Due to restrictions in the hardware (e.g. need to do the whole conversion in one go),
    some combinations of inputs are not supported */
 static bool esp_aes_gcm_input_support_hw_accel(size_t length, const unsigned char *aad, size_t aad_len,
@@ -523,6 +538,7 @@ static bool esp_aes_gcm_input_support_hw_accel(size_t length, const unsigned cha
 
     return support_hw_accel;
 }
+#endif
 
 static int esp_aes_gcm_crypt_and_tag_partial_hw( esp_gcm_context *ctx,
         int mode,
@@ -565,6 +581,7 @@ int esp_aes_gcm_crypt_and_tag( esp_gcm_context *ctx,
                                size_t tag_len,
                                unsigned char *tag )
 {
+#if CONFIG_MBEDTLS_HARDWARE_GCM
     int ret;
     lldesc_t aad_desc[2] = {};
     lldesc_t *aad_head_desc = NULL;
@@ -667,6 +684,9 @@ int esp_aes_gcm_crypt_and_tag( esp_gcm_context *ctx,
     esp_aes_release_hardware();
 
     return ( ret );
+#else
+    return esp_aes_gcm_crypt_and_tag_partial_hw(ctx, mode, length, iv, iv_len, aad, aad_len, input, output, tag_len, tag);
+#endif
 }
 
 
@@ -704,5 +724,3 @@ int esp_aes_gcm_auth_decrypt( esp_gcm_context *ctx,
 
     return ( 0 );
 }
-
-#endif //SOC_AES_SUPPORT_GCM

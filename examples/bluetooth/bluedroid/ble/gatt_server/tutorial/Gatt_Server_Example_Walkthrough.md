@@ -186,13 +186,15 @@ struct gatts_profile_inst {
 The Application Profiles are stored in an array and corresponding callback functions `gatts_profile_a_event_handler()` and `gatts_profile_b_event_handler()` are assigned. Different applications on the GATT client use different interfaces, represented by the gatts_if parameter. For initialization, this parameter is set to `ESP_GATT_IF_NONE`, which means that the Application Profile is not linked to any client yet.
 
 ```c
+/* One gatt-based profile one app_id and one gatts_if, this array will store the gatts_if returned by ESP_GATTS_REG_EVT */
 static struct gatts_profile_inst gl_profile_tab[PROFILE_NUM] = {
     [PROFILE_A_APP_ID] = {
         .gatts_cb = gatts_profile_a_event_handler,
-        .gatts_if = ESP_GATT_IF_NONE,
+        .gatts_if = ESP_GATT_IF_NONE,       /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
+    },
     [PROFILE_B_APP_ID] = {
-        .gatts_cb = gatts_profile_b_event_handler,
-        .gatts_if = ESP_GATT_IF_NONE,
+        .gatts_cb = gatts_profile_b_event_handler,                   /* This demo does not implement, similar as profile A */
+        .gatts_if = ESP_GATT_IF_NONE,       /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
     },
 };
 ```
@@ -770,35 +772,37 @@ The `example_write_event_env()` function contains the logic for the write long c
 void example_write_event_env(esp_gatt_if_t gatts_if, prepare_type_env_t *prepare_write_env, esp_ble_gatts_cb_param_t *param){
     esp_gatt_status_t status = ESP_GATT_OK;
     if (param->write.need_rsp){
-       if (param->write.is_prep){
-            if (prepare_write_env->prepare_buf == NULL){
+        if (param->write.is_prep) {
+            if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
+                status = ESP_GATT_INVALID_OFFSET;
+            } else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
+                status = ESP_GATT_INVALID_ATTR_LEN;
+            }
+            if (status == ESP_GATT_OK && prepare_write_env->prepare_buf == NULL) {
                 prepare_write_env->prepare_buf = (uint8_t *)malloc(PREPARE_BUF_MAX_SIZE*sizeof(uint8_t));
                 prepare_write_env->prepare_len = 0;
                 if (prepare_write_env->prepare_buf == NULL) {
                     ESP_LOGE(GATTS_TAG, "Gatt_server prep no mem\n");
                     status = ESP_GATT_NO_RESOURCES;
                 }
-            } else {
-                if(param->write.offset > PREPARE_BUF_MAX_SIZE) {
-                    status = ESP_GATT_INVALID_OFFSET;
-                }
-                else if ((param->write.offset + param->write.len) > PREPARE_BUF_MAX_SIZE) {
-                    status = ESP_GATT_INVALID_ATTR_LEN;
-                }
             }
 
             esp_gatt_rsp_t *gatt_rsp = (esp_gatt_rsp_t *)malloc(sizeof(esp_gatt_rsp_t));
-            gatt_rsp->attr_value.len = param->write.len;
-            gatt_rsp->attr_value.handle = param->write.handle;
-            gatt_rsp->attr_value.offset = param->write.offset;
-            gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
-            memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
-            esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id,  
-                                                                 param->write.trans_id, status, gatt_rsp);
-            if (response_err != ESP_OK){
-               ESP_LOGE(GATTS_TAG, "Send response error\n");
+            if (gatt_rsp) {
+                gatt_rsp->attr_value.len = param->write.len;
+                gatt_rsp->attr_value.handle = param->write.handle;
+                gatt_rsp->attr_value.offset = param->write.offset;
+                gatt_rsp->attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
+                memcpy(gatt_rsp->attr_value.value, param->write.value, param->write.len);
+                esp_err_t response_err = esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, gatt_rsp);
+                if (response_err != ESP_OK){
+                    ESP_LOGE(GATTS_TAG, "Send response error\n");
+                }
+                free(gatt_rsp);
+            } else {
+                ESP_LOGE(GATTS_TAG, "malloc failed, no resource to send response error\n");
+                status = ESP_GATT_NO_RESOURCES;
             }
-            free(gatt_rsp);
             if (status != ESP_GATT_OK){
                 return;
             }
@@ -828,7 +832,7 @@ The function then checks if the Prepare Write Request parameter represented by t
 
 ```c
 …
-if (param->write.is_prep){
+if (param->write.is_prep) {
 …
 }else{
 	esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, status, NULL);
@@ -850,9 +854,9 @@ static prepare_type_env_t b_prepare_write_env;
 In order to use the prepare buffer, some memory space is allocated for it. In case the allocation fails due to a lack of memory, an error is printed:
 
 ```c
-if (prepare_write_env->prepare_buf == NULL) {
-    prepare_write_env->prepare_buf =  
-    (uint8_t*)malloc(PREPARE_BUF_MAX_SIZE*sizeof(uint8_t));  
+if (status == ESP_GATT_OK && prepare_write_env->prepare_buf == NULL) {
+    prepare_write_env->prepare_buf =
+    (uint8_t*)malloc(PREPARE_BUF_MAX_SIZE*sizeof(uint8_t));
     prepare_write_env->prepare_len = 0;
     if (prepare_write_env->prepare_buf == NULL) {  
        ESP_LOGE(GATTS_TAG, "Gatt_server prep no mem\n");
