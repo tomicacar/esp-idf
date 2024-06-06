@@ -68,6 +68,7 @@ static cached_tag_entry_t s_log_cache[TAG_CACHE_SIZE];
 static uint32_t s_log_cache_max_generation = 0;
 static uint32_t s_log_cache_entry_count = 0;
 static vprintf_like_t s_log_print_func = &vprintf;
+static vprintf_like_ss_t s_log_print_func_ss = NULL;
 
 #ifdef LOG_BUILTIN_CHECKS
 static uint32_t s_log_cache_misses = 0;
@@ -87,6 +88,16 @@ vprintf_like_t esp_log_set_vprintf(vprintf_like_t func)
     esp_log_impl_lock();
     vprintf_like_t orig_func = s_log_print_func;
     s_log_print_func = func;
+    esp_log_impl_unlock();
+    return orig_func;
+}
+
+
+vprintf_like_ss_t esp_log_set_vprintf_ss(vprintf_like_ss_t func)
+{
+    esp_log_impl_lock();
+    vprintf_like_ss_t orig_func = s_log_print_func_ss;
+    s_log_print_func_ss = func;
     esp_log_impl_unlock();
     return orig_func;
 }
@@ -197,8 +208,14 @@ void esp_log_writev(esp_log_level_t level,
         return;
     }
 
-    (*s_log_print_func)(format, args);
-
+    if (s_log_print_func_ss)
+    {
+        (*s_log_print_func_ss)( level, tag, format, args);
+    }
+    else
+    {
+        (*s_log_print_func)(format, args);
+    }
 }
 
 void esp_log_write(esp_log_level_t level,

@@ -41,6 +41,7 @@ typedef enum {
 } esp_log_level_t;
 
 typedef int (*vprintf_like_t)(const char *, va_list);
+typedef int (*vprintf_like_ss_t)(esp_log_level_t level, const char* tag, const char* format, va_list args);
 
 /**
  * @brief Default log level
@@ -96,6 +97,7 @@ esp_log_level_t esp_log_level_get(const char* tag);
  * @return func old Function used for output.
  */
 vprintf_like_t esp_log_set_vprintf(vprintf_like_t func);
+vprintf_like_ss_t esp_log_set_vprintf_ss(vprintf_like_ss_t func);
 
 /**
  * @brief Function which returns timestamp to be used in log output
