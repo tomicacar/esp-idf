@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -21,10 +21,19 @@ extern "C" {
 /**
  * @brief Logic function used for EXT1 wakeup mode.
  */
+#if CONFIG_IDF_TARGET_ESP32
 typedef enum {
     ESP_EXT1_WAKEUP_ALL_LOW = 0,    //!< Wake the chip when all selected GPIOs go low
     ESP_EXT1_WAKEUP_ANY_HIGH = 1    //!< Wake the chip when any of the selected GPIOs go high
 } esp_sleep_ext1_wakeup_mode_t;
+#else
+typedef enum {
+    ESP_EXT1_WAKEUP_ANY_LOW = 0,    //!< Wake the chip when any of the selected GPIOs go low
+    ESP_EXT1_WAKEUP_ANY_HIGH = 1,   //!< Wake the chip when any of the selected GPIOs go high
+    ESP_EXT1_WAKEUP_ALL_LOW __attribute__((deprecated("wakeup mode \"ALL_LOW\" is no longer supported after ESP32, \
+    please use ESP_EXT1_WAKEUP_ANY_LOW instead"))) = ESP_EXT1_WAKEUP_ANY_LOW
+} esp_sleep_ext1_wakeup_mode_t;
+#endif
 
 #if SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
 typedef enum {
@@ -236,9 +245,13 @@ esp_err_t esp_sleep_enable_ext1_wakeup(uint64_t mask, esp_sleep_ext1_wakeup_mode
  * @note This function does not modify pin configuration. The pins are
  *       configured inside esp_deep_sleep_start, immediately before entering sleep mode.
  *
- * @note You don't need to care to pull-up or pull-down before using this
- *       function, because this will be set internally in esp_deep_sleep_start
- *       based on the wakeup mode. BTW, when you use low level to wake up the
+ * @note You don't need to worry about pull-up or pull-down resistors before
+ *       using this function because the ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS
+ *       option is enabled by default. It will automatically set pull-up or pull-down
+ *       resistors internally in esp_deep_sleep_start based on the wakeup mode. However,
+ *       when using external pull-up or pull-down resistors, please be sure to disable
+ *       the ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS option, as the combination of internal
+ *       and external resistors may cause interference. BTW, when you use low level to wake up the
  *       chip, we strongly recommend you to add external resistors (pull-up).
  *
  * @param gpio_pin_mask  Bit mask of GPIO numbers which will cause wakeup. Only GPIOs

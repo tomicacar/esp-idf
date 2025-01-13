@@ -209,8 +209,6 @@ static uint32_t select_best_tuning_config_dtr(spi_timing_config_t *config, uint3
 static uint32_t select_best_tuning_config_str(spi_timing_config_t *config, uint32_t consecutive_length, uint32_t end)
 {
 #if (SPI_TIMING_CORE_CLOCK_MHZ == 120 || SPI_TIMING_CORE_CLOCK_MHZ == 240)
-    ESP_EARLY_LOGW("FLASH/PSRAM", "DO NOT USE FOR MASS PRODUCTION! Timing parameters may be updated in future IDF version.");
-
     //STR best point scheme
     uint32_t best_point;
 
@@ -242,6 +240,7 @@ static void select_best_tuning_config(spi_timing_config_t *config, uint32_t cons
         best_point = select_best_tuning_config_str(config, consecutive_length, end);
 #endif
         s_flash_best_timing_tuning_config = config->tuning_config_table[best_point];
+        ESP_EARLY_LOGI(TAG, "Flash timing tuning index: %d", best_point);
     } else {
 #if SPI_TIMING_PSRAM_DTR_MODE
         best_point = select_best_tuning_config_dtr(config, consecutive_length, end);
@@ -249,6 +248,7 @@ static void select_best_tuning_config(spi_timing_config_t *config, uint32_t cons
         best_point = select_best_tuning_config_str(config, consecutive_length, end);
 #endif
         s_psram_best_timing_tuning_config = config->tuning_config_table[best_point];
+        ESP_EARLY_LOGI(TAG, "PSRAM timing tuning index: %d", best_point);
     }
 }
 
@@ -470,8 +470,8 @@ void spi_timing_enter_mspi_high_speed_mode(bool control_spi1)
 
 void spi_timing_change_speed_mode_cache_safe(bool switch_down)
 {
-    Cache_Freeze_ICache_Enable(1);
-    Cache_Freeze_DCache_Enable(1);
+    Cache_Freeze_ICache_Enable(CACHE_FREEZE_ACK_BUSY);
+    Cache_Freeze_DCache_Enable(CACHE_FREEZE_ACK_BUSY);
     if (switch_down) {
         //enter MSPI low speed mode, extra delays should be removed
         spi_timing_enter_mspi_low_speed_mode(false);

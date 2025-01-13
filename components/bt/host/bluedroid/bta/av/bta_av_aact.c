@@ -727,8 +727,7 @@ static void bta_av_adjust_seps_idx(tBTA_AV_SCB *p_scb, UINT8 avdt_handle)
     for (xx = 0; xx < BTA_AV_MAX_SEPS; xx++) {
         APPL_TRACE_DEBUG("av_handle: %d codec_type: %d",
                          p_scb->seps[xx].av_handle, p_scb->seps[xx].codec_type);
-        if ((p_scb->seps[xx].av_handle && p_scb->codec_type == p_scb->seps[xx].codec_type)
-                && (p_scb->seps[xx].av_handle == avdt_handle)) {
+        if ((p_scb->seps[xx].av_handle) && (p_scb->seps[xx].av_handle == avdt_handle)) {
             p_scb->sep_idx      = xx;
             p_scb->avdt_handle  = p_scb->seps[xx].av_handle;
             break;
@@ -1021,6 +1020,7 @@ void bta_av_cleanup(tBTA_AV_SCB *p_scb, tBTA_AV_DATA *p_data)
     p_scb->wait = 0;
     p_scb->num_disc_snks = 0;
     p_scb->disc_rsn = 0;
+    p_scb->avdt_handle = 0;
     bta_sys_stop_timer(&p_scb->timer);
     if (p_scb->deregistring) {
         /* remove stream */
@@ -1285,11 +1285,11 @@ void bta_av_setconfig_rsp (tBTA_AV_SCB *p_scb, tBTA_AV_DATA *p_data)
 
         if (p_scb->codec_type == BTA_AV_CODEC_SBC || num > 1) {
             /* if SBC is used by the SNK as INT, discover req is not sent in bta_av_config_ind.
-                       * call disc_res now */
+                       * call cfg_res now */
             /* this is called in A2DP SRC path only, In case of SINK we don't need it  */
             if (local_sep == AVDT_TSEP_SRC) {
-                p_scb->p_cos->disc_res(p_scb->hndl, num, num, 0, p_scb->peer_addr,
-                                       UUID_SERVCLASS_AUDIO_SOURCE);
+                p_scb->p_cos->cfg_res(p_scb->hndl, num, num, 0, p_scb->peer_addr,
+                                      UUID_SERVCLASS_AUDIO_SOURCE);
             }
         } else {
             /* we do not know the peer device and it is using non-SBC codec

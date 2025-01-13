@@ -88,7 +88,7 @@ class EspCoreDumpVersion(object):
 
     COREDUMP_SUPPORTED_TARGETS = XTENSA_CHIPS + RISCV_CHIPS
 
-    def __init__(self, version=None):  # type: (int) -> None
+    def __init__(self, version=None):  # type: (Optional[int]) -> None
         """Constructor for core dump version
         """
         super(EspCoreDumpVersion, self).__init__()
@@ -248,7 +248,7 @@ class EspCoreDumpLoader(EspCoreDumpVersion):
         else:
             raise NotImplementedError
 
-    def _extract_elf_corefile(self, exe_name=None, e_machine=ESPCoreDumpElfFile.EM_XTENSA):  # type: (str, int) -> None
+    def _extract_elf_corefile(self, exe_name=None, e_machine=ESPCoreDumpElfFile.EM_XTENSA):  # type: (Optional[str], int) -> None
         """
         Reads the ELF formatted core dump image and parse it
         """
@@ -261,7 +261,7 @@ class EspCoreDumpLoader(EspCoreDumpVersion):
         for seg in core_elf.note_segments:
             for note_sec in seg.note_secs:
                 # Check for version info note
-                if note_sec.name == 'ESP_CORE_DUMP_INFO' \
+                if note_sec.name == b'ESP_CORE_DUMP_INFO' \
                         and note_sec.type == ESPCoreDumpElfFile.PT_INFO \
                         and exe_name:
                     exe_elf = ElfFile(exe_name)
@@ -271,10 +271,20 @@ class EspCoreDumpLoader(EspCoreDumpVersion):
                         'sha256' / Bytes(64)  # SHA256 as hex string
                     )
                     coredump_sha256 = coredump_sha256_struct.parse(note_sec.desc[:coredump_sha256_struct.sizeof()])
-                    if coredump_sha256.sha256 != app_sha256:
+
+                    logging.debug('App SHA256: {!r}'.format(app_sha256))
+                    logging.debug('Core dump SHA256: {!r}'.format(coredump_sha256))
+
+                    # Actual coredump SHA may be shorter than a full SHA256 hash
+                    # with NUL byte padding, according to the app's APP_RETRIEVE_LEN_ELF_SHA
+                    # length
+                    core_sha_trimmed = coredump_sha256.sha256.rstrip(b'\x00').decode()
+                    app_sha_trimmed = app_sha256[:len(core_sha_trimmed)].decode()
+
+                    if core_sha_trimmed != app_sha_trimmed:
                         raise ESPCoreDumpLoaderError(
-                            'Invalid application image for coredump: coredump SHA256({!r}) != app SHA256({!r}).'
-                            .format(coredump_sha256, app_sha256))
+                            'Invalid application image for coredump: coredump SHA256({}) != app SHA256({}).'
+                            .format(core_sha_trimmed, app_sha_trimmed))
                     if coredump_sha256.ver != self.version:
                         raise ESPCoreDumpLoaderError(
                             'Invalid application image for coredump: coredump SHA256 version({}) != app SHA256 version({}).'
@@ -429,11 +439,12 @@ class EspCoreDumpLoader(EspCoreDumpVersion):
 class ESPCoreDumpFlashLoader(EspCoreDumpLoader):
     ESP_COREDUMP_PART_TABLE_OFF = 0x8000
 
-    def __init__(self, offset, target=None, port=None, baud=None):
-        # type: (int, Optional[str], Optional[str], Optional[int]) -> None
+    def __init__(self, offset, target=None, port=None, baud=None, part_table_offset=None):
+        # type: (int, Optional[str], Optional[str], Optional[int], Optional[int]) -> None
         super(ESPCoreDumpFlashLoader, self).__init__()
         self.port = port
         self.baud = baud
+        self.part_table_offset = part_table_offset
 
         self._get_core_src(offset, target)
         self.target = self._load_core_src()
@@ -511,12 +522,15 @@ class ESPCoreDumpFlashLoader(EspCoreDumpLoader):
         tool_args = [sys.executable, PARTTOOL_PY]
         if self.port:
             tool_args.extend(['--port', self.port])
+        if self.part_table_offset:
+            tool_args.extend(['--partition-table-offset', str(self.part_table_offset)])
         tool_args.extend(['read_partition', '--partition-type', 'data', '--partition-subtype', 'coredump', '--output'])
 
         self.core_src_file = self._create_temp_file()
         try:
             tool_args.append(self.core_src_file)  # type: ignore
             # read core dump partition
+            print(f"Running {' '.join(tool_args)}")
             et_out = subprocess.check_output(tool_args)
             if et_out:
                 logging.info(et_out.decode('utf-8'))
@@ -532,8 +546,7 @@ class ESPCoreDumpFlashLoader(EspCoreDumpLoader):
         Get core dump partition info using parttool
         """
         logging.info('Retrieving core dump partition offset and size...')
-        if not part_off:
-            part_off = self.ESP_COREDUMP_PART_TABLE_OFF
+        part_off = part_off or self.part_table_offset or self.ESP_COREDUMP_PART_TABLE_OFF
         try:
             tool_args = [sys.executable, PARTTOOL_PY, '-q', '--partition-table-offset', str(part_off)]
             if self.port:

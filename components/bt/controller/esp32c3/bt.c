@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -110,7 +110,7 @@ do{\
 } while(0)
 
 #define OSI_FUNCS_TIME_BLOCKING  0xffffffff
-#define OSI_VERSION              0x00010006
+#define OSI_VERSION              0x00010007
 #define OSI_MAGIC_VALUE          0xFADEBEAD
 
 /* Types definition
@@ -192,6 +192,8 @@ struct osi_funcs_t {
     void (* _esp_hw_power_down)(void);
     void (* _esp_hw_power_up)(void);
     void (* _ets_backup_dma_copy)(uint32_t reg, uint32_t mem_addr, uint32_t num, bool to_rem);
+    void (* _ets_delay_us)(uint32_t us);
+    void (* _btdm_rom_table_ready)(void);
 };
 
 
@@ -250,6 +252,8 @@ extern void esp_mac_bb_power_down(void);
 extern void esp_mac_bb_power_up(void);
 extern void ets_backup_dma_copy(uint32_t reg, uint32_t mem_addr, uint32_t num, bool to_mem);
 #endif
+
+extern void btdm_cca_feature_enable(void);
 
 extern uint32_t _bt_bss_start;
 extern uint32_t _bt_bss_end;
@@ -310,6 +314,7 @@ static void interrupt_off_wrapper(int intr_num);
 static void btdm_hw_mac_power_up_wrapper(void);
 static void btdm_hw_mac_power_down_wrapper(void);
 static void btdm_backup_dma_copy_wrapper(uint32_t reg, uint32_t mem_addr, uint32_t num,  bool to_mem);
+static void btdm_funcs_table_ready_wrapper(void);
 
 static void btdm_slp_tmr_callback(void *arg);
 
@@ -374,6 +379,8 @@ static const struct osi_funcs_t osi_funcs_ro = {
     ._esp_hw_power_down = btdm_hw_mac_power_down_wrapper,
     ._esp_hw_power_up = btdm_hw_mac_power_up_wrapper,
     ._ets_backup_dma_copy = btdm_backup_dma_copy_wrapper,
+    ._ets_delay_us = esp_rom_delay_us,
+    ._btdm_rom_table_ready = btdm_funcs_table_ready_wrapper,
 };
 
 static DRAM_ATTR struct osi_funcs_t *osi_funcs_p;
@@ -687,7 +694,7 @@ static bool IRAM_ATTR is_in_isr_wrapper(void)
 
 static void *malloc_internal_wrapper(size_t size)
 {
-    void *p = heap_caps_malloc(size, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL|MALLOC_CAP_DMA);
+    void *p = heap_caps_malloc(size, MALLOC_CAP_INTERNAL|MALLOC_CAP_DMA);
     if(p == NULL) {
         ESP_LOGE(BT_LOG_TAG, "Malloc failed");
     }
@@ -756,19 +763,26 @@ static void btdm_sleep_enter_phase1_wrapper(uint32_t lpcycles)
         return;
     }
 
-    // start a timer to wake up and acquire the pm_lock before modem_sleep awakes
     uint32_t us_to_sleep = btdm_lpcycles_2_hus(lpcycles, NULL) >> 1;
 
 #define BTDM_MIN_TIMER_UNCERTAINTY_US      (1800)
+#define BTDM_RTC_SLOW_CLK_RC_DRIFT_PERCENT 7
     assert(us_to_sleep > BTDM_MIN_TIMER_UNCERTAINTY_US);
     // allow a maximum time uncertainty to be about 488ppm(1/2048) at least as clock drift
     // and set the timer in advance
     uint32_t uncertainty = (us_to_sleep >> 11);
+#if CONFIG_FREERTOS_USE_TICKLESS_IDLE
+    if (rtc_clk_slow_freq_get() == RTC_SLOW_FREQ_RTC) {
+        uncertainty = us_to_sleep * BTDM_RTC_SLOW_CLK_RC_DRIFT_PERCENT / 100;
+    }
+#endif
+
     if (uncertainty < BTDM_MIN_TIMER_UNCERTAINTY_US) {
         uncertainty = BTDM_MIN_TIMER_UNCERTAINTY_US;
     }
 
     assert (s_lp_stat.wakeup_timer_started == 0);
+    // start a timer to wake up and acquire the pm_lock before modem_sleep awakes
     if (esp_timer_start_once(s_btdm_slp_tmr, us_to_sleep - uncertainty) == ESP_OK) {
         s_lp_stat.wakeup_timer_started = 1;
     } else {
@@ -787,12 +801,12 @@ static void btdm_sleep_enter_phase2_wrapper(void)
             assert(0);
         }
 
-        if (s_lp_stat.pm_lock_released == 0) {
 #ifdef CONFIG_PM_ENABLE
+        if (s_lp_stat.pm_lock_released == 0) {
             esp_pm_lock_release(s_pm_lock);
-#endif
             s_lp_stat.pm_lock_released = 1;
         }
+#endif
     }
 }
 
@@ -910,6 +924,13 @@ static void async_wakeup_request_end(int event)
     }
 
     return;
+}
+
+static void btdm_funcs_table_ready_wrapper(void)
+{
+#if BT_BLE_CCA_MODE == 2
+    btdm_cca_feature_enable();
+#endif
 }
 
 static void coex_schm_status_bit_set_wrapper(uint32_t type, uint32_t status)
@@ -1181,18 +1202,6 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
 
     btdm_controller_mem_init();
 
-#if CONFIG_MAC_BB_PD
-    if (esp_register_mac_bb_pd_callback(btdm_mac_bb_power_down_cb) != 0) {
-        err = ESP_ERR_INVALID_ARG;
-        goto error;
-    }
-
-    if (esp_register_mac_bb_pu_callback(btdm_mac_bb_power_up_cb) != 0) {
-        err = ESP_ERR_INVALID_ARG;
-        goto error;
-    }
-#endif
-
     osi_funcs_p = (struct osi_funcs_t *)malloc_internal_wrapper(sizeof(struct osi_funcs_t));
     if (osi_funcs_p == NULL) {
         return ESP_ERR_NO_MEM;
@@ -1340,14 +1349,10 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
     periph_module_enable(PERIPH_BT_MODULE);
     periph_module_reset(PERIPH_BT_MODULE);
 
-    esp_phy_enable();
-    s_lp_stat.phy_enabled = 1;
-
     if (btdm_controller_init(cfg) != 0) {
         err = ESP_ERR_NO_MEM;
         goto error;
     }
-    coex_pti_v2();
 
     btdm_controller_status = ESP_BT_CONTROLLER_STATUS_INITED;
 
@@ -1376,11 +1381,6 @@ esp_err_t esp_bt_controller_deinit(void)
 static void bt_controller_deinit_internal(void)
 {
     periph_module_disable(PERIPH_BT_MODULE);
-
-    if (s_lp_stat.phy_enabled) {
-        esp_phy_disable();
-        s_lp_stat.phy_enabled = 0;
-    }
 
     // deinit low power control resources
     do {
@@ -1442,11 +1442,6 @@ static void bt_controller_deinit_internal(void)
         btdm_lpcycle_us = 0;
     } while (0);
 
-#if CONFIG_MAC_BB_PD
-    esp_unregister_mac_bb_pd_callback(btdm_mac_bb_power_down_cb);
-    esp_unregister_mac_bb_pu_callback(btdm_mac_bb_power_up_cb);
-#endif
-
     esp_bt_power_domain_off();
 #if CONFIG_MAC_BB_PD
     esp_mac_bb_pd_mem_deinit();
@@ -1475,6 +1470,12 @@ esp_err_t esp_bt_controller_enable(esp_bt_mode_t mode)
         return ESP_ERR_INVALID_ARG;
     }
 
+    /* Enable PHY when enabling controller to reduce power dissipation after controller init
+     * Notice the init order: esp_phy_enable() -> bt_bb_v2_init_cmplx() -> coex_pti_v2()
+     */
+    esp_phy_enable();
+    s_lp_stat.phy_enabled = 1;
+
 #if CONFIG_SW_COEXIST_ENABLE
     coex_enable();
 #endif
@@ -1489,6 +1490,18 @@ esp_err_t esp_bt_controller_enable(esp_bt_mode_t mode)
         s_lp_stat.pm_lock_released = 0;
 #endif
 
+#if CONFIG_MAC_BB_PD
+        if (esp_register_mac_bb_pd_callback(btdm_mac_bb_power_down_cb) != 0) {
+            ret = ESP_ERR_INVALID_ARG;
+            goto error;
+        }
+
+        if (esp_register_mac_bb_pu_callback(btdm_mac_bb_power_up_cb) != 0) {
+            ret = ESP_ERR_INVALID_ARG;
+            goto error;
+        }
+#endif
+
         if (s_lp_cntl.enable) {
             btdm_controller_enable_sleep(true);
         }
@@ -1499,6 +1512,8 @@ esp_err_t esp_bt_controller_enable(esp_bt_mode_t mode)
         goto error;
     }
 
+    coex_pti_v2();
+
     btdm_controller_status = ESP_BT_CONTROLLER_STATUS_ENABLED;
 
     return ret;
@@ -1506,6 +1521,11 @@ esp_err_t esp_bt_controller_enable(esp_bt_mode_t mode)
 error:
     // disable low power mode
     do {
+#if CONFIG_MAC_BB_PD
+        esp_unregister_mac_bb_pd_callback(btdm_mac_bb_power_down_cb);
+        esp_unregister_mac_bb_pu_callback(btdm_mac_bb_power_up_cb);
+#endif
+
         btdm_controller_enable_sleep(false);
 #ifdef CONFIG_PM_ENABLE
         if (s_lp_cntl.no_light_sleep) {
@@ -1521,6 +1541,10 @@ error:
 #if CONFIG_SW_COEXIST_ENABLE
     coex_disable();
 #endif
+    if (s_lp_stat.phy_enabled) {
+        esp_phy_disable();
+        s_lp_stat.phy_enabled = 0;
+    }
     return ret;
 }
 
@@ -1539,11 +1563,20 @@ esp_err_t esp_bt_controller_disable(void)
 #if CONFIG_SW_COEXIST_ENABLE
     coex_disable();
 #endif
+    if (s_lp_stat.phy_enabled) {
+        esp_phy_disable();
+        s_lp_stat.phy_enabled = 0;
+    }
 
     btdm_controller_status = ESP_BT_CONTROLLER_STATUS_INITED;
 
     // disable low power mode
     do {
+#if CONFIG_MAC_BB_PD
+        esp_unregister_mac_bb_pd_callback(btdm_mac_bb_power_down_cb);
+        esp_unregister_mac_bb_pu_callback(btdm_mac_bb_power_up_cb);
+#endif
+
 #ifdef CONFIG_PM_ENABLE
         if (s_lp_cntl.no_light_sleep) {
             esp_pm_lock_release(s_light_sleep_pm_lock);

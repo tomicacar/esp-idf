@@ -90,7 +90,7 @@ Therefore, in addition to the client tasks, the Host Library also requires a tas
 Devices
 ^^^^^^^
 
-The Host Library hides the details of device handling (such as connection, memory allocation, and enumeration) from the clients. The clients are provided only with a list of already connected and enumerated devices to choose from. During enumeration, each device is configured to use configuration 1.
+The Host Library hides the details of device handling (such as connection, memory allocation, and enumeration) from the clients. The clients are provided only with a list of already connected and enumerated devices to choose from. During enumeration, each device is automatically configured to use the first configuration found (i.e., the first configuration descriptor returned on a Get Configuration Descriptor request). For most standard devices, the first configuration will have a ``bConfigurationValue`` of ``1``.
 
 It is possible for a two or more clients to simultaneously communicate with the same device as long as they are not communicating to the same interface. However, multiple clients can simultaneously communicate with the same device's default endpoint (EP0), which will result in their control transfers being serialized.
 
@@ -169,7 +169,7 @@ With reference the graph above, the typical lifecycle involves the following key
 2. Once the Host Library is installed, the clients can be registered by calling :cpp:func:`usb_host_client_register`.
     - This is typically called from the client task (where the client task waits for a signal from the Daemon Task).
     - This can be called elsewhere if necessary as long it is called after :cpp:func:`usb_host_install`.
-3. Device 1 connects and is then enumerated. 
+3. Device 1 connects and is then enumerated.
     - Each registered client (in this case Client 1 and Client 2) are notified of the new device by way of the :cpp:enumerator:`USB_HOST_CLIENT_EVENT_NEW_DEV` event.
     - Client 1 opens Device 1 and begins communication with it.
 4. Similarly Device 2 connects and is enumerated.
@@ -365,15 +365,57 @@ The USB Host Stack provides a number examples that implement host class drivers 
 CDC-ACM
 """""""
 
-* A host class driver for the Communication Device Class (Abstract Control Model) is currently implemented as an example component (found via :example:`peripherals/usb/host/cdc/common/cdc_acm_host`).
+* A host class driver for the Communication Device Class (Abstract Control Model) is deployed to `IDF component registry <https://components.espressif.com/component/espressif/usb_host_cdc_acm>`__.
 * The :example:`peripherals/usb/host/cdc/cdc_acm_host` example uses the CDC-ACM host driver component to communicate with CDC-ACM devices
-* The :example:`peripherals/usb/host/cdc/cdc_acm_bg96` example uses the CDC-ACM host driver component to communicate with non-compliant CDC-ACM devices (i.e., vendor-specific classes that support a subset of CDC-ACM features) such as the Quectel BG96 modem.
+* The :example:`peripherals/usb/host/cdc/cdc_acm_vcp` example shows how can you extend the CDC-ACM host driver to interface Virtual COM Port devices.
+* The CDC-ACM driver is also used in `esp_modem examples <https://github.com/espressif/esp-protocols/tree/master/components/esp_modem/examples>`__, where it is used for communication with cellular modems.
 
 MSC
 """
 
 * A host class driver for the Mass Storage Class (Bulk-Only Transport) is current implemented as an example found via :example:`peripherals/usb/host/msc`.
 
+
+.. ---------------------------------------------- USB Host Menuconfig --------------------------------------------------
+
+Host Stack Configuration
+------------------------
+
+Non-Compliant Device Support
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To support USB devices that are non-compliant in various scenarios or exhibit specific behaviors, it is possible to configure the USB Host stack.
+
+As a USB device may be hot-plugged, it is essential to have the configurable delays between power switching and device attachment, and when the device's internal power has stabilized.
+
+Enumeration Configuration
+"""""""""""""""""""""""""
+
+During the process of enumerating connected USB devices, several timeout values ensure the proper functioning of the device.
+
+.. figure:: ../../../_static/usb_host/poweron-timings.png
+    :align: center
+    :alt: USB Root Hub Power-on and Connection Events Timing
+    :figclass: align-center
+
+    USB Root Hub Power-on and Connection Events Timing
+
+The figure above shows all the timeouts associated with both turning on port power with a device connected and hot-plugging a device.
+
+* After a port is reset or resumed, the USB system software is expected to provide a "recovery" interval of 10 ms before the device attached to the port is expected to respond to data transfers.
+* After the reset/resume recovery interval, if a device receives a ``SetAddress()`` request, the device must be able to complete processing of the request and be able to successfully complete the Status stage of the request within 50 ms.
+* After successful completion of the Status stage, the device is allowed a ``SetAddress()`` recovery interval of 2 ms.
+
+.. note::
+
+    For more details regarding connection event timings, please refer to *Universal Serial Bus 2.0 Specification* > Chapter 7.1.7.3 *Connect and Disconnect Signaling*.
+
+Configurable parameters of the USB host stack can be configured with multiple options via Menuconfig.
+
+* For debounce delay, refer to :ref:`CONFIG_USB_HOST_DEBOUNCE_DELAY_MS`.
+* For reset hold interval, refer to :ref:`CONFIG_USB_HOST_RESET_HOLD_MS`.
+* For reset recovery interval, refer to :ref:`CONFIG_USB_HOST_RESET_RECOVERY_MS`.
+* Fer ``SetAddress()`` recovery interval, refer to :ref:`CONFIG_USB_HOST_SET_ADDR_RECOVERY_MS`.
 
 .. -------------------------------------------------- API Reference ----------------------------------------------------
 

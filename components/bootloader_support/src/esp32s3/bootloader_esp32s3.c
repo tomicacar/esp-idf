@@ -218,7 +218,7 @@ static esp_err_t bootloader_init_spi_flash(void)
     }
 #endif
 
-#if CONFIG_SPI_FLASH_HPM_ENABLE
+#if CONFIG_BOOTLOADER_FLASH_DC_AWARE
     // Reset flash, clear volatile bits DC[0:1]. Make it work under default mode to boot.
     bootloader_spi_flash_reset();
 #endif
@@ -228,7 +228,9 @@ static esp_err_t bootloader_init_spi_flash(void)
 #if CONFIG_ESPTOOLPY_FLASHMODE_QIO || CONFIG_ESPTOOLPY_FLASHMODE_QOUT
     bootloader_enable_qio_mode();
 #endif
-
+#if CONFIG_BOOTLOADER_CACHE_32BIT_ADDR_OCTAL_FLASH
+    bootloader_flash_32bits_address_map_enable(bootloader_flash_get_spi_mode());
+#endif
     print_flash_info(&bootloader_image_hdr);
     update_flash_config(&bootloader_image_hdr);
     //ensure the flash is write-protected
@@ -322,7 +324,7 @@ static void bootloader_super_wdt_auto_feed(void)
 
 static inline void bootloader_ana_reset_config(void)
 {
-    //Enable WDT, BOR, and GLITCH reset
+    //Enable WDT, BOD, and GLITCH reset
     bootloader_ana_super_wdt_reset_config(true);
     bootloader_ana_bod_reset_config(true);
     bootloader_ana_clock_glitch_reset_config(true);

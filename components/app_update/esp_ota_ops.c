@@ -181,13 +181,18 @@ esp_err_t esp_ota_write(esp_ota_handle_t handle, const void *data, size_t size)
         return ESP_ERR_INVALID_ARG;
     }
 
+    if (size == 0) {
+        ESP_LOGD(TAG, "write data size is 0");
+        return ESP_OK;
+    }
+
     // find ota handle in linked list
     for (it = LIST_FIRST(&s_ota_ops_entries_head); it != NULL; it = LIST_NEXT(it, entries)) {
         if (it->handle == handle) {
             if (it->need_erase) {
                 // must erase the partition before writing to it
-                uint32_t first_sector = it->wrote_size / SPI_FLASH_SEC_SIZE;
-                uint32_t last_sector = (it->wrote_size + size) / SPI_FLASH_SEC_SIZE;
+                uint32_t first_sector = it->wrote_size / SPI_FLASH_SEC_SIZE; // first affected sector
+                uint32_t last_sector = (it->wrote_size + size - 1) / SPI_FLASH_SEC_SIZE; // last affected sector
 
                 ret = ESP_OK;
                 if ((it->wrote_size % SPI_FLASH_SEC_SIZE) == 0) {
@@ -919,8 +924,8 @@ esp_err_t esp_ota_revoke_secure_boot_public_key(esp_ota_secure_boot_public_key_i
 
         if (trusted_keys.key_digests[i] != NULL) {
             bool all_zeroes = true;
-            for (unsigned j = 0; j < ESP_SECURE_BOOT_DIGEST_LEN; j++) {
-                all_zeroes = all_zeroes && (*(uint8_t *)(trusted_keys.key_digests[i] + j) == 0);
+            for (unsigned j = 0; j < ESP_SECURE_BOOT_DIGEST_LEN; j+=4) {
+                all_zeroes = all_zeroes && (*(uint32_t *)(trusted_keys.key_digests[i] + j) == 0);
             }
             if (!all_zeroes) {
                 memcpy(trusted_digests.key_digests[trusted_digests.num_digests++], (uint8_t *)trusted_keys.key_digests[i], ESP_SECURE_BOOT_DIGEST_LEN);

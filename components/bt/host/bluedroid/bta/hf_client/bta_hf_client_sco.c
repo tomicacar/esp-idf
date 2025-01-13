@@ -47,7 +47,8 @@ static const tBTM_ESCO_PARAMS bta_hf_client_esco_params[] = {
         .tx_bw = BTM_64KBITS_RATE,
         .max_latency = 10,
         .voice_contfmt = BTM_VOICE_SETTING_CVSD,
-        .packet_types = (BTM_SCO_LINK_ONLY_MASK          |
+        .packet_types = (BTM_SCO_PKT_TYPES_MASK_HV1 |
+        BTM_SCO_PKT_TYPES_MASK_HV3 |
         BTM_SCO_PKT_TYPES_MASK_NO_2_EV3 |
         BTM_SCO_PKT_TYPES_MASK_NO_3_EV3 |
         BTM_SCO_PKT_TYPES_MASK_NO_2_EV5 |
@@ -60,9 +61,9 @@ static const tBTM_ESCO_PARAMS bta_hf_client_esco_params[] = {
         .tx_bw = BTM_64KBITS_RATE,
         .max_latency = 10,
         .voice_contfmt = BTM_VOICE_SETTING_CVSD,
-        /* Allow controller to use all types available except 5-slot EDR */
-        .packet_types = (BTM_SCO_LINK_ALL_PKT_MASK |
-        BTM_SCO_PKT_TYPES_MASK_NO_2_EV5 |
+        /* Packet Types : 2-EV3 */
+        .packet_types = (BTM_SCO_PKT_TYPES_MASK_NO_2_EV5 |
+        BTM_SCO_PKT_TYPES_MASK_NO_3_EV3 |
         BTM_SCO_PKT_TYPES_MASK_NO_3_EV5),
         .retrans_effort = BTM_ESCO_RETRANS_POWER,
     },
@@ -72,10 +73,9 @@ static const tBTM_ESCO_PARAMS bta_hf_client_esco_params[] = {
         .tx_bw = BTM_64KBITS_RATE,
         .max_latency = 13,
         .voice_contfmt = BTM_VOICE_SETTING_TRANS,
-        /* Packet Types : EV3 + 2-EV3               */
-        .packet_types = (BTM_SCO_PKT_TYPES_MASK_EV3  |
+        /* Packet Types : 2-EV3 */
+        .packet_types = (BTM_SCO_PKT_TYPES_MASK_NO_2_EV5 |
         BTM_SCO_PKT_TYPES_MASK_NO_3_EV3 |
-        BTM_SCO_PKT_TYPES_MASK_NO_2_EV5 |
         BTM_SCO_PKT_TYPES_MASK_NO_3_EV5),
         .retrans_effort = BTM_ESCO_RETRANS_QUALITY,
     },
@@ -86,9 +86,9 @@ static const tBTM_ESCO_PARAMS bta_hf_client_esco_params[] = {
         .tx_bw = BTM_64KBITS_RATE,
         .max_latency = 12,
         .voice_contfmt = BTM_VOICE_SETTING_CVSD,
-        /* Allow controller to use all types available except 5-slot EDR */
-        .packet_types = (BTM_SCO_LINK_ALL_PKT_MASK |
-        BTM_SCO_PKT_TYPES_MASK_NO_2_EV5 |
+        /* Packet Types : 2-EV3 */
+        .packet_types = (BTM_SCO_PKT_TYPES_MASK_NO_2_EV5 |
+        BTM_SCO_PKT_TYPES_MASK_NO_3_EV3 |
         BTM_SCO_PKT_TYPES_MASK_NO_3_EV5),
         .retrans_effort = BTM_ESCO_RETRANS_QUALITY,
     }
@@ -155,6 +155,7 @@ void bta_hf_client_cback_sco(UINT8 event)
     tBTA_HF_CLIENT_HDR    evt;
 
     memset(&evt, 0, sizeof(evt));
+    evt.sync_conn_handle = BTM_ReadScoHandle(bta_hf_client_cb.scb.sco_idx);
 
     /* call app cback */
     (*bta_hf_client_cb.p_cback)(event, (tBTA_HF_CLIENT_HDR *) &evt);
@@ -237,7 +238,29 @@ static void bta_hf_client_sco_conn_rsp(tBTM_ESCO_CONN_REQ_EVT_DATA *p_data)
     BTM_EScoConnRsp(p_data->sco_inx, hci_status, &resp);
 }
 
-#if (BTM_SCO_HCI_INCLUDED == TRUE )
+#if (BTM_SCO_HCI_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         bta_hf_client_pkt_stat_nums
+**
+** Description      Get the packet status number
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+void bta_hf_client_pkt_stat_nums(tBTA_HF_CLIENT_DATA *p_data)
+{
+    tBTA_SCO_PKT_STAT_NUMS pkt_stat_nums;
+    uint16_t sync_conn_handle = p_data->pkt_stat.sync_conn_handle;
+    BTM_PktStatNumsGet(sync_conn_handle, (tBTM_SCO_PKT_STAT_NUMS *) &pkt_stat_nums);
+
+    /* call app cback */
+    if (bta_hf_client_cb.p_cback) {
+        (*bta_hf_client_cb.p_cback)(BTA_HF_CLIENT_PKT_STAT_NUMS_GET_EVT, (void*) &pkt_stat_nums);
+    }
+}
+
 /*******************************************************************************
 **
 ** Function         bta_hf_client_ci_sco_data
@@ -254,6 +277,7 @@ void bta_hf_client_ci_sco_data(tBTA_HF_CLIENT_DATA *p_data)
     bta_hf_client_sco_event(BTA_HF_CLIENT_SCO_CI_DATA_E);
 }
 #endif
+
 /*******************************************************************************
 **
 ** Function         bta_hf_client_sco_connreq_cback

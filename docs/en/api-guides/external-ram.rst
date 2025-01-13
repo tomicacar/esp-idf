@@ -8,10 +8,13 @@ Support for external RAM
 
 Introduction
 ============
-{IDF_TARGET_PSRAM_SIZE:default="Value not updated", esp32="4 MB", esp32s2="10.5 MB", esp32s3="16 MB"}
+{IDF_TARGET_PSRAM_VADDR_SIZE:default="Value not updated", esp32="4 MB", esp32s2="10.5 MB", esp32s3="32 MB"}
 
-{IDF_TARGET_NAME} has a few hundred kilobytes of internal RAM, residing on the same die as the rest of the chip components. It can be insufficient for some purposes, so {IDF_TARGET_NAME} has the ability to also use up to {IDF_TARGET_PSRAM_SIZE} of external SPI RAM memory. The external memory is incorporated in the memory map and, with certain restrictions, is usable in the same way as internal data RAM.
+{IDF_TARGET_NAME} has a few hundred kilobytes of internal RAM, residing on the same die as the rest of the chip components. It can be insufficient for some purposes, {IDF_TARGET_NAME} has the ability to use up to {IDF_TARGET_PSRAM_VADDR_SIZE} of virtual addresses for external SPI RAM memory. The external memory is incorporated in the memory map and, with certain restrictions, is usable in the same way as internal data RAM.
 
+.. only:: esp32s3
+
+    The {IDF_TARGET_PSRAM_VADDR_SIZE} virtual addresses are shared with flash instructions and rodata.
 
 Hardware
 ========
@@ -50,7 +53,7 @@ Select this option by choosing "Integrate RAM into memory map" from :ref:`CONFIG
 
 This is the most basic option for external SPI RAM integration. Most likely, you will need another, more advanced option.
 
-During the ESP-IDF startup, external RAM is mapped into the data address space, starting at address {IDF_TARGET_PSRAM_ADDR_START} (byte-accessible). The length of this region is the same as the SPI RAM size (up to the limit of {IDF_TARGET_PSRAM_SIZE}).
+During the ESP-IDF startup, external RAM is mapped into the data address space, starting at address {IDF_TARGET_PSRAM_ADDR_START} (byte-accessible). The length of this region is the same as the SPI RAM size (up to the limit of {IDF_TARGET_PSRAM_VADDR_SIZE}).
 
 Applications can manually place data in external memory by creating pointers to this region. So if an application uses external memory, it is responsible for all management of the external SPI RAM: coordinating buffer usage, preventing corruption, etc.
 
@@ -96,7 +99,7 @@ Because some buffers can only be allocated in internal memory, a second configur
 
     Enable this option by checking :ref:`CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY`. This configuration setting is independent of the other three.
 
-    If enabled, a region of the address space starting from {IDF_TARGET_PSRAM_ADDR_START} will be used to store zero-initialized data (BSS segment) from the lwIP, net80211, libpp, and bluedroid ESP-IDF libraries.
+    If enabled, the region of the data virtual address space where the PSRAM is mapped to will be used to store zero-initialized data (BSS segment) from the lwIP, net80211, libpp, wpa_supplicant and bluedroid ESP-IDF libraries.
 
     Additional data can be moved from the internal BSS segment to external RAM by applying the macro ``EXT_RAM_ATTR`` to any static declaration (which is not initialized to a non-zero value).
 

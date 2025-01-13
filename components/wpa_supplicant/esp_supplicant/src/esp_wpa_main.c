@@ -114,7 +114,7 @@ bool  wpa_attach(void)
     ret = wpa_sm_init(NULL, wpa_sendto_wrapper,
                  wpa_config_assoc_ie, wpa_install_key, wpa_get_key, wpa_deauthenticate, wpa_neg_complete);
     if(ret) {
-        ret = (esp_wifi_register_tx_cb_internal(eapol_txcb, WIFI_TXCB_EAPOL_ID) == ESP_OK);
+        ret = (esp_wifi_register_eapol_txdonecb_internal(eapol_txcb) == ESP_OK);
     }
     esp_set_scan_ie();
     return ret;
@@ -161,6 +161,7 @@ void wpa_ap_get_peer_spp_msg(void *sm_data, bool *spp_cap, bool *spp_req)
 bool  wpa_deattach(void)
 {
     esp_wifi_sta_wpa2_ent_disable();
+    esp_wifi_register_eapol_txdonecb_internal(NULL);
     wpa_sm_deinit();
     return true;
 }
@@ -185,7 +186,7 @@ int wpa_sta_connect(uint8_t *bssid)
 
 void wpa_config_done(void)
 {
-    /* used in future for setting scan and assoc IEs */
+    esp_set_scan_ie();
 }
 
 int wpa_parse_wpa_ie_wrapper(const u8 *wpa_ie, size_t wpa_ie_len, wifi_wpa_ie_t *data)
@@ -286,5 +287,6 @@ int esp_supplicant_init(void)
 int esp_supplicant_deinit(void)
 {
     esp_supplicant_common_deinit();
+    esp_supplicant_unset_all_appie();
     return esp_wifi_unregister_wpa_cb_internal();
 }

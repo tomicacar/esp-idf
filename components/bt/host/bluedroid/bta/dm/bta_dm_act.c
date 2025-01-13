@@ -577,6 +577,14 @@ void bta_dm_disable (tBTA_DM_MSG *p_data)
     bta_dm_disable_search_and_disc();
     bta_dm_cb.disabling = TRUE;
 
+#if BLE_INCLUDED == TRUE
+    /* reset scan activity status*/
+    btm_cb.ble_ctr_cb.scan_activity = 0;
+
+    /* reset advertising activity status*/
+    btm_cb.ble_ctr_cb.inq_var.state = 0;
+#endif
+
 #if BLE_INCLUDED == TRUE && BTA_GATT_INCLUDED == TRUE
     BTM_BleClearBgConnDev();
 #endif
@@ -982,10 +990,6 @@ static void bta_dm_process_remove_device(BD_ADDR bd_addr, tBT_TRANSPORT transpor
 
     BTM_SecDeleteDevice(bd_addr, transport);
 
-#if (BLE_INCLUDED == TRUE && GATTC_INCLUDED == TRUE)
-    /* remove all cached GATT information */
-    BTA_GATTC_Refresh(bd_addr, false);
-#endif
     if (bta_dm_cb.p_sec_cback) {
         tBTA_DM_SEC sec_event;
         bdcpy(sec_event.link_down.bd_addr, bd_addr);
@@ -1140,8 +1144,6 @@ void bta_dm_close_acl(tBTA_DM_MSG *p_data)
 #if (BLE_INCLUDED == TRUE && GATTC_INCLUDED == TRUE)
         /* need to remove all pending background connection if any */
         BTA_GATTC_CancelOpen(0, p_remove_acl->bd_addr, FALSE);
-        /* remove all cached GATT information */
-        BTA_GATTC_Refresh(p_remove_acl->bd_addr, false);
 #endif
     }
     /* otherwise, no action needed */
@@ -1445,6 +1447,40 @@ void bta_dm_oob_reply(tBTA_DM_MSG *p_data)
 {
 #if (BLE_INCLUDED)
     BTM_BleOobDataReply(p_data->oob_reply.bd_addr, BTM_SUCCESS, p_data->oob_reply.len, p_data->oob_reply.value);
+#endif
+}
+
+/*******************************************************************************
+**
+** Function         bta_dm_sc_oob_reply
+**
+** Description      This function is called to provide the OOB data for
+**                  SMP in response to BLE secure connection OOB request.
+**
+** Returns          void
+**
+*******************************************************************************/
+void bta_dm_sc_oob_reply(tBTA_DM_MSG *p_data)
+{
+#if (BLE_INCLUDED)
+    BTM_BleSecureConnectionOobDataReply(p_data->sc_oob_reply.bd_addr, p_data->sc_oob_reply.c, p_data->sc_oob_reply.r);
+#endif
+}
+
+/*******************************************************************************
+**
+** Function         bta_dm_sc_create_oob_data
+**
+** Description      This function is called to create the OOB data for
+**                  SMP when secure connection.
+**
+** Returns          void
+**
+*******************************************************************************/
+void bta_dm_sc_create_oob_data(tBTA_DM_MSG *p_data)
+{
+#if (BLE_INCLUDED)
+    BTM_BleSecureConnectionCreateOobData();
 #endif
 }
 
@@ -3636,8 +3672,6 @@ void bta_dm_acl_change(tBTA_DM_MSG *p_data)
 #if (BLE_INCLUDED == TRUE && GATTC_INCLUDED == TRUE)
             /* need to remove all pending background connection */
             BTA_GATTC_CancelOpen(0, p_bda, FALSE);
-            /* remove all cached GATT information */
-            BTA_GATTC_Refresh(p_bda, false);
 #endif
         }
 
@@ -3815,8 +3849,6 @@ static BOOLEAN bta_dm_remove_sec_dev_entry(BD_ADDR remote_bd_addr)
 #if (BLE_INCLUDED == TRUE && GATTC_INCLUDED == TRUE)
         /* need to remove all pending background connection */
         BTA_GATTC_CancelOpen(0, remote_bd_addr, FALSE);
-        /* remove all cached GATT information */
-        BTA_GATTC_Refresh(remote_bd_addr, false);
 #endif
     }
     return is_device_deleted;
@@ -4732,6 +4764,17 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
         bta_dm_cb.p_sec_cback(BTA_DM_BLE_OOB_REQ_EVT, &sec_event);
         break;
 
+    case BTM_LE_SC_OOB_REQ_EVT:
+        bdcpy(sec_event.ble_req.bd_addr, bda);
+        bta_dm_cb.p_sec_cback(BTA_DM_BLE_SC_OOB_REQ_EVT, &sec_event);
+        break;
+
+    case BTM_LE_SC_LOC_OOB_EVT:
+        memcpy(sec_event.local_oob_data.local_oob_c, p_data->local_oob_data.commitment, BT_OCTET16_LEN);
+        memcpy(sec_event.local_oob_data.local_oob_r, p_data->local_oob_data.randomizer, BT_OCTET16_LEN);
+        bta_dm_cb.p_sec_cback(BTA_DM_BLE_SC_CR_LOC_OOB_EVT, &sec_event);
+        break;
+
     case BTM_LE_NC_REQ_EVT:
         bdcpy(sec_event.key_notif.bd_addr, bda);
         BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name,bta_dm_get_remname(), BD_NAME_LEN);
@@ -5057,7 +5100,7 @@ void bta_dm_ble_update_conn_params (tBTA_DM_MSG *p_data)
 *******************************************************************************/
 void bta_dm_ble_disconnect (tBTA_DM_MSG *p_data)
 {
-    L2CA_RemoveFixedChnl(L2CAP_ATT_CID, p_data->ble_disconnect.remote_bda);
+    L2CA_BleDisconnect(p_data->ble_disconnect.remote_bda);
 }
 
 /*******************************************************************************
@@ -5598,6 +5641,16 @@ void btm_dm_ble_multi_adv_disable(tBTA_DM_MSG *p_data)
                                     p_data->ble_multi_adv_disable.inst_id, p_ref, BTA_FAILURE);
     }
 }
+
+void bta_dm_ble_gap_clear_adv(tBTA_DM_MSG *p_data)
+{
+    if (BTM_BleClearAdv(p_data->ble_clear_adv.p_clear_adv_cback) == FALSE) {
+        if (p_data->ble_clear_adv.p_clear_adv_cback) {
+            (*p_data->ble_clear_adv.p_clear_adv_cback)(BTA_FAILURE);
+        }
+    }
+}
+
 #if (BLE_50_FEATURE_SUPPORT == TRUE)
 void bta_dm_ble_gap_read_phy(tBTA_DM_MSG *p_data)
 {
@@ -5679,7 +5732,8 @@ void bta_dm_ble_gap_periodic_adv_cfg_data_raw(tBTA_DM_MSG *p_data)
 
     BTM_BlePeriodicAdvCfgDataRaw(p_data->ble_cfg_periodic_adv_data.instance,
                                  p_data->ble_cfg_periodic_adv_data.length,
-                                 p_data->ble_cfg_periodic_adv_data.data);
+                                 p_data->ble_cfg_periodic_adv_data.data,
+                                 p_data->ble_cfg_periodic_adv_data.only_update_did);
 }
 
 void bta_dm_ble_gap_periodic_adv_enable(tBTA_DM_MSG *p_data)
@@ -5778,6 +5832,37 @@ void bta_dm_ble_gap_set_prefer_ext_conn_params(tBTA_DM_MSG *p_data)
 }
 
 #endif // #if (BLE_50_FEATURE_SUPPORT == TRUE)
+
+#if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
+void bta_dm_ble_gap_periodic_adv_recv_enable(tBTA_DM_MSG *p_data)
+{
+    BTM_BlePeriodicAdvRecvEnable(p_data->ble_periodic_adv_recv_enable.sync_handle,
+                                 p_data->ble_periodic_adv_recv_enable.enable);
+}
+
+void bta_dm_ble_gap_periodic_adv_sync_trans(tBTA_DM_MSG *p_data)
+{
+    BTM_BlePeriodicAdvSyncTrans(p_data->ble_periodic_adv_sync_trans.addr,
+                                p_data->ble_periodic_adv_sync_trans.service_data,
+                                p_data->ble_periodic_adv_sync_trans.sync_handle);
+}
+
+void bta_dm_ble_gap_periodic_adv_set_info_trans(tBTA_DM_MSG *p_data)
+{
+    BTM_BlePeriodicAdvSetInfoTrans(p_data->ble_periodic_adv_set_info_trans.addr,
+                                   p_data->ble_periodic_adv_set_info_trans.service_data,
+                                   p_data->ble_periodic_adv_set_info_trans.adv_hanlde);
+}
+
+void bta_dm_ble_gap_set_periodic_adv_sync_trans_params(tBTA_DM_MSG *p_data)
+{
+    BTM_BleSetPeriodicAdvSyncTransParams(p_data->ble_set_past_params.addr,
+                                         p_data->ble_set_past_params.params.mode,
+                                         p_data->ble_set_past_params.params.skip,
+                                         p_data->ble_set_past_params.params.sync_timeout,
+                                         p_data->ble_set_past_params.params.cte_type);
+}
+#endif // #if (BLE_FEAT_PERIODIC_ADV_SYNC_TRANSFER == TRUE)
 /*******************************************************************************
 **
 ** Function         bta_dm_ble_setup_storage

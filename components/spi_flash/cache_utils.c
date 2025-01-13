@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2015-2021 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2015-2024 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -62,9 +62,6 @@ static __attribute__((unused)) const char *TAG = "cache";
 
 #define DPORT_CACHE_GET_VAL(cpuid) (cpuid == 0) ? DPORT_CACHE_VAL(PRO) : DPORT_CACHE_VAL(APP)
 #define DPORT_CACHE_GET_MASK(cpuid) (cpuid == 0) ? DPORT_CACHE_MASK(PRO) : DPORT_CACHE_MASK(APP)
-
-static void IRAM_ATTR spi_flash_disable_cache(uint32_t cpuid, uint32_t *saved_state);
-static void IRAM_ATTR spi_flash_restore_cache(uint32_t cpuid, uint32_t saved_state);
 
 static uint32_t s_flash_op_cache_state[2];
 
@@ -300,7 +297,7 @@ void IRAM_ATTR spi_flash_enable_interrupts_caches_no_os(void)
  * function in ROM. They are used to work around a bug where Cache_Read_Disable requires a call to
  * Cache_Flush before Cache_Read_Enable, even if cached data was not modified.
  */
-static void IRAM_ATTR spi_flash_disable_cache(uint32_t cpuid, uint32_t *saved_state)
+void IRAM_ATTR spi_flash_disable_cache(uint32_t cpuid, uint32_t *saved_state)
 {
 #if CONFIG_IDF_TARGET_ESP32
     uint32_t ret = 0;
@@ -336,7 +333,7 @@ static void IRAM_ATTR spi_flash_disable_cache(uint32_t cpuid, uint32_t *saved_st
 #endif
 }
 
-static void IRAM_ATTR spi_flash_restore_cache(uint32_t cpuid, uint32_t saved_state)
+void IRAM_ATTR spi_flash_restore_cache(uint32_t cpuid, uint32_t saved_state)
 {
 #if CONFIG_IDF_TARGET_ESP32
     const uint32_t cache_mask = DPORT_CACHE_GET_MASK(cpuid);
@@ -404,12 +401,17 @@ IRAM_ATTR void esp_config_instruction_cache_mode(void)
 
 IRAM_ATTR void esp_config_data_cache_mode(void)
 {
+#define CACHE_SIZE_0KB  99  //If Cache set to 0 KB, cache is bypassed, the cache size doesn't take into effect. Set this macro to a unique value for log
+
     cache_size_t cache_size;
     cache_ways_t cache_ways;
     cache_line_size_t cache_line_size;
 
 #if CONFIG_ESP32S2_INSTRUCTION_CACHE_8KB
-#if CONFIG_ESP32S2_DATA_CACHE_8KB
+#if CONFIG_ESP32S2_DATA_CACHE_0KB
+    Cache_Allocate_SRAM(CACHE_MEMORY_ICACHE_LOW, CACHE_MEMORY_INVALID, CACHE_MEMORY_INVALID, CACHE_MEMORY_INVALID);
+    cache_size = CACHE_SIZE_0KB;
+#elif CONFIG_ESP32S2_DATA_CACHE_8KB
     Cache_Allocate_SRAM(CACHE_MEMORY_ICACHE_LOW, CACHE_MEMORY_DCACHE_LOW, CACHE_MEMORY_INVALID, CACHE_MEMORY_INVALID);
     cache_size = CACHE_SIZE_8KB;
 #else
@@ -417,7 +419,10 @@ IRAM_ATTR void esp_config_data_cache_mode(void)
     cache_size = CACHE_SIZE_16KB;
 #endif
 #else
-#if CONFIG_ESP32S2_DATA_CACHE_8KB
+#if CONFIG_ESP32S2_DATA_CACHE_0KB
+    Cache_Allocate_SRAM(CACHE_MEMORY_ICACHE_LOW, CACHE_MEMORY_ICACHE_HIGH, CACHE_MEMORY_INVALID, CACHE_MEMORY_INVALID);
+    cache_size = CACHE_SIZE_0KB;
+#elif CONFIG_ESP32S2_DATA_CACHE_8KB
     Cache_Allocate_SRAM(CACHE_MEMORY_ICACHE_LOW, CACHE_MEMORY_ICACHE_HIGH, CACHE_MEMORY_DCACHE_LOW, CACHE_MEMORY_INVALID);
     cache_size = CACHE_SIZE_8KB;
 #else
@@ -432,7 +437,7 @@ IRAM_ATTR void esp_config_data_cache_mode(void)
 #else
     cache_line_size = CACHE_LINE_SIZE_32B;
 #endif
-    ESP_EARLY_LOGI(TAG, "Data cache \t\t: size %dKB, %dWays, cache line size %dByte", cache_size == CACHE_SIZE_8KB ? 8 : 16, 4, cache_line_size == CACHE_LINE_SIZE_16B ? 16 : 32);
+    ESP_EARLY_LOGI(TAG, "Data cache \t\t: size %dKB, %dWays, cache line size %dByte", (cache_size == CACHE_SIZE_0KB) ? 0 : ((cache_size == CACHE_SIZE_8KB) ? 8 : 16), 4, cache_line_size == CACHE_LINE_SIZE_16B ? 16 : 32);
     Cache_Set_DCache_Mode(cache_size, cache_ways, cache_line_size);
     Cache_Invalidate_DCache_All();
 }
@@ -941,3 +946,24 @@ void IRAM_ATTR spi_flash_enable_cache(uint32_t cpuid)
     spi_flash_restore_cache(0, 0); // TODO cache_value should be non-zero
 #endif
 }
+
+#if CONFIG_IDF_TARGET_ESP32S3
+/*protect cache opreation*/
+static spinlock_t cache_op_lock = SPINLOCK_INITIALIZER;
+
+IRAM_ATTR void esp_cache_op_lock(void)
+{
+    portENTER_CRITICAL_SAFE(&cache_op_lock);
+}
+
+IRAM_ATTR void esp_cache_op_unlock(void)
+{
+    portEXIT_CRITICAL_SAFE(&cache_op_lock);
+}
+
+IRAM_ATTR void esp_cache_op_lock_init(void)
+{
+    rom_cache_op_cb.start = esp_cache_op_lock;
+    rom_cache_op_cb.end = esp_cache_op_unlock;
+}
+#endif// CONFIG_IDF_TARGET_ESP32S3

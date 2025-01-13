@@ -150,6 +150,7 @@ static u8 *wpa3_build_sae_msg(u8 *bssid, u32 sae_msg_type, size_t *sae_msg_len)
         case SAE_MSG_COMMIT:
             /* Do not go for SAE when WPS is ongoing */
             if (esp_wifi_get_wps_status_internal() != WPS_STATUS_DISABLE) {
+                *sae_msg_len = 0;
                 return NULL;
             }
             if (ESP_OK != wpa3_build_sae_commit(bssid, sae_msg_len))
@@ -175,9 +176,8 @@ static int wpa3_parse_sae_commit(u8 *buf, u32 len, u16 status)
     int ret;
 
     if (g_sae_data.state != SAE_COMMITTED) {
-        wpa_printf(MSG_ERROR, "wpa3: failed to parse SAE commit in state(%d)!",
-                   g_sae_data.state);
-        return ESP_FAIL;
+        wpa_printf(MSG_DEBUG, "wpa3: Discarding commit frame received in state %d", g_sae_data.state);
+        return ESP_ERR_WIFI_DISCARD;
     }
 
     if (status == WLAN_STATUS_ANTI_CLOGGING_TOKEN_REQ) {
@@ -200,7 +200,10 @@ static int wpa3_parse_sae_commit(u8 *buf, u32 len, u16 status)
 
     ret = sae_parse_commit(&g_sae_data, buf, len, NULL, 0, g_allowed_groups,
                            status == WLAN_STATUS_SAE_HASH_TO_ELEMENT);
-    if (ret) {
+    if (ret == SAE_SILENTLY_DISCARD) {
+        wpa_printf(MSG_DEBUG, "wpa3: Discarding commit frame due to reflection attack");
+        return ESP_ERR_WIFI_DISCARD;
+    } else if (ret) {
         wpa_printf(MSG_ERROR, "wpa3: could not parse commit(%d)", ret);
         return ret;
     }

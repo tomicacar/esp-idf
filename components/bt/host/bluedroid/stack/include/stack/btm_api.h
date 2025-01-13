@@ -1062,6 +1062,17 @@ enum {
 };
 typedef UINT8 tBTM_SCO_DATA_FLAG;
 
+/* Count the number of SCO Data Packet Status */
+typedef struct {
+    UINT32 rx_total;
+    UINT32 rx_correct;
+    UINT32 rx_err;
+    UINT32 rx_none;
+    UINT32 rx_lost;
+    UINT32 tx_total;
+    UINT32 tx_discarded;
+} tBTM_SCO_PKT_STAT_NUMS;
+
 /***************************
 **  SCO Callback Functions
 ****************************/
@@ -1766,6 +1777,7 @@ typedef union {
 #if BLE_INCLUDED == TRUE && SMP_INCLUDED == TRUE
     tBTM_LE_COMPLT      complt;     /* BTM_LE_COMPLT_EVT      */
     tSMP_OOB_DATA_TYPE  req_oob_type;
+    tSMP_LOC_OOB_DATA   local_oob_data;
 #endif
     tBTM_LE_KEY         key;
 } tBTM_LE_EVT_DATA;
@@ -4188,6 +4200,17 @@ tBTM_STATUS BTM_SetAfhChannels (AFH_CHANNELS channels, tBTM_CMPL_CB *p_afh_chann
 **
 *******************************************************************************/
 tBTM_STATUS BTM_BleSetChannels (BLE_CHANNELS channels, tBTM_CMPL_CB *p_ble_channels_cmpl_cback);
+
+/*******************************************************************************
+**
+** Function         BTM_PktStatNumsGet
+**
+** Description      This function is called to get the number of packet status struct
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTM_PktStatNumsGet(UINT16 sync_conn_handle, tBTM_SCO_PKT_STAT_NUMS *pkt_nums);
 
 #ifdef __cplusplus
 }

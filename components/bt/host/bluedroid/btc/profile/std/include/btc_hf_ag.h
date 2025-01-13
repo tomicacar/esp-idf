@@ -1,16 +1,8 @@
-// Copyright 2018 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * SPDX-FileCopyrightText: 2015-2023 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 /*******************************************************************************
  *
@@ -63,7 +55,8 @@ typedef enum
     BTC_HF_OUT_CALL_EVT,
     BTC_HF_END_CALL_EVT,
     //REG
-    BTC_HF_REGISTER_DATA_CALLBACK_EVT
+    BTC_HF_REGISTER_DATA_CALLBACK_EVT,
+    BTC_HF_REQUEST_PKT_STAT_EVT
 } btc_hf_act_t;
 
 /* btc_hf_args_t */
@@ -156,7 +149,8 @@ typedef union
     struct cnum_args {
         bt_bdaddr_t                      remote_addr;
         char                             *number;
-        esp_hf_subscriber_service_type_t type;
+        int                              number_type;
+        esp_hf_subscriber_service_type_t service_type;
     } cnum_rep;
 
     //BTC_HF_NREC_RESPONSE_EVT
@@ -189,10 +183,15 @@ typedef union
     } phone;
 
     // BTC_HF_REGISTER_DATA_CALLBACK_EVT
-    struct reg_data_callback {
+    struct ag_reg_data_callback {
         esp_hf_incoming_data_cb_t recv;
         esp_hf_outgoing_data_cb_t send;
     } reg_data_cb;
+
+    // BTC_HF_REQUEST_PKT_STAT_EVT
+    struct ag_req_pkt_stat_sync_handle {
+        UINT16            sync_conn_handle;
+    } pkt_sync_hd;
 
 } btc_hf_args_t;
 

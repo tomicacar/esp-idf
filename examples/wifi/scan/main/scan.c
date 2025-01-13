@@ -40,14 +40,17 @@ static void print_auth_mode(int authmode)
     case WIFI_AUTH_WPA_WPA2_PSK:
         ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA_WPA2_PSK");
         break;
-    case WIFI_AUTH_WPA2_ENTERPRISE:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_ENTERPRISE");
+    case WIFI_AUTH_ENTERPRISE:
+        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_ENTERPRISE");
         break;
     case WIFI_AUTH_WPA3_PSK:
         ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA3_PSK");
         break;
     case WIFI_AUTH_WPA2_WPA3_PSK:
         ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_WPA3_PSK");
+        break;
+    case WIFI_AUTH_WPA3_ENT_192:
+        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA3_ENT_192");
         break;
     default:
         ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_UNKNOWN");
@@ -76,6 +79,18 @@ static void print_cipher_type(int pairwise_cipher, int group_cipher)
     case WIFI_CIPHER_TYPE_TKIP_CCMP:
         ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
         break;
+    case WIFI_CIPHER_TYPE_AES_CMAC128:
+        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_AES_CMAC128");
+        break;
+    case WIFI_CIPHER_TYPE_SMS4:
+        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_SMS4");
+        break;
+    case WIFI_CIPHER_TYPE_GCMP:
+        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_GCMP");
+        break;
+    case WIFI_CIPHER_TYPE_GCMP256:
+        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_GCMP256");
+        break;
     default:
         ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
         break;
@@ -99,6 +114,15 @@ static void print_cipher_type(int pairwise_cipher, int group_cipher)
         break;
     case WIFI_CIPHER_TYPE_TKIP_CCMP:
         ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
+        break;
+    case WIFI_CIPHER_TYPE_SMS4:
+        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_SMS4");
+        break;
+    case WIFI_CIPHER_TYPE_GCMP:
+        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_GCMP");
+        break;
+    case WIFI_CIPHER_TYPE_GCMP256:
+        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_GCMP256");
         break;
     default:
         ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
@@ -125,10 +149,11 @@ static void wifi_scan(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_wifi_scan_start(NULL, true);
+    ESP_LOGI(TAG, "Max AP number ap_info can hold = %u", number);
     ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
     ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
-    ESP_LOGI(TAG, "Total APs scanned = %u", ap_count);
-    for (int i = 0; (i < DEFAULT_SCAN_LIST_SIZE) && (i < ap_count); i++) {
+    ESP_LOGI(TAG, "Total APs scanned = %u, actual AP number ap_info holds = %u", ap_count, number);
+    for (int i = 0; i < number; i++) {
         ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
         ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
         print_auth_mode(ap_info[i].authmode);
