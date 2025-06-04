@@ -111,6 +111,16 @@ static void panic_print_char_usb_serial_jtag(const char c)
 #endif //CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG || CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG
 
 
+static char *gPanicBuffer = NULL;
+static int gPanicBufferLen = 0;
+static int gPanicBufferOffset = 0;
+void panic_backtrace_use_buffer( char *buffer, int len)
+{
+    gPanicBuffer = buffer;
+    gPanicBufferLen = len;
+    gPanicBufferOffset = 0;
+}
+
 void panic_print_char(const char c)
 {
 #if CONFIG_ESP_CONSOLE_UART
@@ -122,6 +132,14 @@ void panic_print_char(const char c)
 #if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG || CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG
     panic_print_char_usb_serial_jtag(c);
 #endif
+
+    if (gPanicBuffer &&
+        gPanicBufferLen &&
+        gPanicBufferOffset<gPanicBufferLen)
+    {
+        gPanicBuffer[gPanicBufferOffset] = c;
+        gPanicBufferOffset++;
+    }
 }
 
 void panic_print_str(const char *str)

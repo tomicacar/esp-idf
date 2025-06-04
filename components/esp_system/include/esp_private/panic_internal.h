@@ -96,6 +96,8 @@ void panic_set_address(void *frame, uint32_t addr);
 
 uint32_t panic_get_cause(const void* frame);
 
+void panic_backtrace_use_buffer( char *buffer, int len);
+
 #ifdef __cplusplus
 }
 #endif
