@@ -39,6 +39,7 @@ else()
         "spi_flash_chip_mxic.c"
         "spi_flash_chip_gd.c"
         "spi_flash_chip_winbond.c"
+        "spi_flash_chip_cypress.c"
         "spi_flash_chip_boya.c"
         "spi_flash_chip_mxic_opi.c"
         "spi_flash_chip_th.c"

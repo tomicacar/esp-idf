@@ -143,10 +143,8 @@ void memspi_host_erase_chip(spi_flash_host_inst_t *host)
     host->driver->common_command(host, &t);
 }
 
-// Only support 24bit address
 void memspi_host_erase_sector(spi_flash_host_inst_t *host, uint32_t start_address)
 {
-    assert(start_address < 0x1000000);
     spi_flash_trans_t t = {
         .command = CMD_SECTOR_ERASE,
         .address_bitlen = 24,
@@ -158,7 +156,6 @@ void memspi_host_erase_sector(spi_flash_host_inst_t *host, uint32_t start_addres
 // Only support 24bit address
 void memspi_host_erase_block(spi_flash_host_inst_t *host, uint32_t start_address)
 {
-    assert(start_address < 0x1000000);
     spi_flash_trans_t t = {
         .command = CMD_LARGE_BLOCK_ERASE,
         .address_bitlen = 24,
@@ -167,10 +164,8 @@ void memspi_host_erase_block(spi_flash_host_inst_t *host, uint32_t start_address
     host->driver->common_command(host, &t);
 }
 
-// Only support 24bit address
 void memspi_host_program_page(spi_flash_host_inst_t *host, const void *buffer, uint32_t address, uint32_t length)
 {
-    assert(address + length <= 0x1000000);
     spi_flash_trans_t t = {
         .command = CMD_PROGRAM_PAGE,
         .address_bitlen = 24,
