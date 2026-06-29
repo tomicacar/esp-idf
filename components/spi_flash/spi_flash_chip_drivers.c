@@ -11,6 +11,7 @@
 #include "spi_flash_chip_mxic.h"
 #include "spi_flash_chip_gd.h"
 #include "spi_flash_chip_winbond.h"
+#include "spi_flash_chip_cypress.h"
 #include "spi_flash_chip_boya.h"
 #include "spi_flash_chip_th.h"
 #include "sdkconfig.h"
@@ -49,6 +50,7 @@ static const spi_flash_chip_t *default_registered_chips[] = {
 #endif
     // Default chip drivers that will accept all chip ID.
     // FM, Winbond and XMC chips are supposed to be supported by this chip driver.
+    &esp_flash_chip_cypress,
     &esp_flash_chip_generic,
     NULL,
 };
