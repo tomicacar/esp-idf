@@ -267,3 +267,31 @@ TEST_CASE("changing early log level")
     ESP_EARLY_LOGI(TEST_TAG, "must indeed be printed");
     CHECK(regex_search(fix.get_print_buffer_string(), test_print) == true);
 }
+
+TEST_CASE("log levels survive generation counter reset")
+{
+    // LOG_CACHE_MAX_GENERATION is lowered by the test build, see the project
+    // CMakeLists, otherwise the reset is half a billion lookups away.
+    BasicLogFixture fix(ESP_LOG_INFO);
+
+    // More tags than TAG_CACHE_SIZE, so the cache stays full and every lookup
+    // takes a generation. Tag pointers have to stay valid, the cache keeps them.
+    static const size_t TAG_COUNT = 40;
+    static char tags[TAG_COUNT][8];
+    for (size_t i = 0; i < TAG_COUNT; ++i) {
+        snprintf(tags[i], sizeof(tags[i]), "tag%u", (unsigned) i);
+    }
+
+    esp_log_level_set(tags[0], ESP_LOG_WARN);
+
+    // Cross the limit several times
+    const unsigned lookups = (LOG_CACHE_MAX_GENERATION + 1) * 3;
+    for (unsigned i = 0; i < lookups; ++i) {
+        esp_log_level_get(tags[i % TAG_COUNT]);
+    }
+
+    // Level set for a tag is kept in the uncached list, the reset must not lose it
+    CHECK(esp_log_level_get(tags[0]) == ESP_LOG_WARN);
+    // Everything else falls back to the default level
+    CHECK(esp_log_level_get(tags[1]) == ESP_LOG_INFO);
+}
