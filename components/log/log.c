@@ -21,10 +21,9 @@
  * After that, bubble-down operation is performed to fix ordering in the
  * min-heap.
  *
- * The potential problem with wrap-around of cache generation counter is
- * ignored for now. This will happen if someone happens to output more
- * than 4 billion log entries, at which point wrap-around will not be
- * the biggest problem.
+ * Generation is stored in a 29 bit field, so the counter is reset (and the
+ * cache dropped) before it stops fitting. Tag levels are kept in the linked
+ * list, only the cached lookups are lost.
  *
  */
 
@@ -49,6 +48,12 @@
 
 // Number of tags to be cached. Must be 2**n - 1, n >= 2.
 #define TAG_CACHE_SIZE 31
+
+// Highest value that fits the generation field of cached_tag_entry_t.
+// Can be lowered at build time to exercise the counter reset.
+#ifndef LOG_CACHE_MAX_GENERATION
+#define LOG_CACHE_MAX_GENERATION ((1U << 29) - 1)
+#endif
 
 typedef struct {
     const char *tag;
@@ -78,6 +83,7 @@ static uint32_t s_log_cache_misses = 0;
 static inline bool get_cached_log_level(const char *tag, esp_log_level_t *level);
 static inline bool get_uncached_log_level(const char *tag, esp_log_level_t *level);
 static inline void add_to_cache(const char *tag, esp_log_level_t level);
+static inline uint32_t next_cache_generation(void);
 static void heap_bubble_down(int index);
 static inline void heap_swap(int i, int j);
 static inline bool should_output(esp_log_level_t level_for_message, esp_log_level_t level_for_tag);
@@ -221,6 +227,22 @@ void esp_log_write(esp_log_level_t level,
     va_end(list);
 }
 
+/* Take the next value of the cache generation counter.
+
+   The counter is reset once it no longer fits the generation field, otherwise
+   cached entries stop being comparable and min-heap ordering breaks. Resetting
+   drops the cache; tag levels live in s_log_tags, so only the cached lookups
+   are lost and tags are cached again as they are used.
+*/
+static inline uint32_t next_cache_generation(void)
+{
+    if (s_log_cache_max_generation > LOG_CACHE_MAX_GENERATION) {
+        s_log_cache_entry_count = 0;
+        s_log_cache_max_generation = 0;
+    }
+    return s_log_cache_max_generation++;
+}
+
 static inline bool get_cached_log_level(const char *tag, esp_log_level_t *level)
 {
     // Look for `tag` in cache
@@ -245,16 +267,20 @@ static inline bool get_cached_log_level(const char *tag, esp_log_level_t *level)
     //  it has just been filled)
     if (s_log_cache_entry_count == TAG_CACHE_SIZE) {
         // Update item generation
-        s_log_cache[i].generation = s_log_cache_max_generation++;
-        // Restore heap ordering
-        heap_bubble_down(i);
+        uint32_t generation = next_cache_generation();
+        // A counter reset drops the cache, leaving no entry to reorder
+        if (s_log_cache_entry_count == TAG_CACHE_SIZE) {
+            s_log_cache[i].generation = generation;
+            // Restore heap ordering
+            heap_bubble_down(i);
+        }
     }
     return true;
 }
 
 static inline void add_to_cache(const char *tag, esp_log_level_t level)
 {
-    uint32_t generation = s_log_cache_max_generation++;
+    uint32_t generation = next_cache_generation();
     // First consider the case when cache is not filled yet.
     // In this case, just add new entry at the end.
     // This happens to satisfy binary min-heap ordering.
