@@ -74,7 +74,17 @@ IRAM_ATTR static void cache_disable(void* arg)
 }
 #endif  //#if !SPI_FLASH_CACHE_NO_DISABLE
 
-static IRAM_ATTR esp_err_t acquire_spi_bus_lock(void *arg)
+/* SmartSense: external flash on SPI2/3 shares the bus with other devices (the
+ * SC16IS752 UART expanders on LPGW). esp_flash holds the bus lock for a whole
+ * operation, so a sector erase blocks every other device on the host for
+ * hundreds of ms. These chips serialise flash operations with a mutex taken
+ * BEFORE the bus lock, which lets the yield hooks below drop the bus lock
+ * during a long wait while flash operations stay serialised against each other.
+ * The order is always mutex -> bus lock, the same order spi_master users take
+ * their own locks in, so the two cannot deadlock. */
+static _lock_t s_spi23_flash_op_lock;
+
+static IRAM_ATTR esp_err_t acquire_spi_bus_lock_only(void *arg)
 {
     spi_bus_lock_dev_handle_t dev_lock = ((app_func_arg_t *)arg)->dev_lock;
 
@@ -87,9 +97,83 @@ static IRAM_ATTR esp_err_t acquire_spi_bus_lock(void *arg)
     return ESP_OK;
 }
 
-static IRAM_ATTR esp_err_t release_spi_bus_lock(void *arg)
+static IRAM_ATTR esp_err_t release_spi_bus_lock_only(void *arg)
 {
     return spi_bus_lock_acquire_end(((app_func_arg_t *)arg)->dev_lock);
+}
+
+static IRAM_ATTR esp_err_t acquire_spi_bus_lock(void *arg)
+{
+    _lock_acquire(&s_spi23_flash_op_lock);
+
+    esp_err_t ret = acquire_spi_bus_lock_only(arg);
+    if (ret != ESP_OK) {
+        _lock_release(&s_spi23_flash_op_lock);
+    }
+    return ret;
+}
+
+static IRAM_ATTR esp_err_t release_spi_bus_lock(void *arg)
+{
+    esp_err_t ret = release_spi_bus_lock_only(arg);
+    _lock_release(&s_spi23_flash_op_lock);
+    return ret;
+}
+
+/* Two different situations reach this hook.
+ *
+ * chip_status != 0 means a wait for the chip to go idle, called with the bus
+ * lock held: ask for the yield below, which hands the bus over and takes it
+ * back.
+ *
+ * chip_status == 0 means the gaps esp_flash_read()/write()/erase_region() leave
+ * between chunks, called with the bus lock NOT held. Requesting a yield there
+ * would end a lock this code does not own. Left alone, though, the flash simply
+ * re-acquires the bus immediately and a run of chunks becomes one long hold as
+ * far as the other devices are concerned - which is what overruns the 64 byte
+ * RX FIFO of the SC16IS752 carrying the modem. Sleeping one tick here is what
+ * the hook is for, and it is the only window the expanders get between chunks. */
+static IRAM_ATTR esp_err_t spi23_flash_os_check_yield(void *arg, uint32_t chip_status, uint32_t* out_request)
+{
+    uint32_t request = 0;
+
+    if (chip_status != 0) {
+        request = SPI_FLASH_YIELD_REQ_YIELD;
+    } else if (likely(xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)) {
+        vTaskDelay(1);
+    }
+
+    if (out_request) {
+        *out_request = request;
+    }
+    return ESP_OK;
+}
+
+/* Hand the bus to whoever is waiting, then take it back. The flash operation
+ * lock is deliberately kept, so no second flash operation can start while this
+ * one is mid-flight.
+ *
+ * The sleep is several ticks rather than one on purpose. What hurts the other
+ * devices on SPI3 is not how long the flash holds the bus - a status poll is
+ * under 100 us - but how often it takes it: the SC16IS752 needs three short
+ * transfers to drain a FIFO, and each one that lands on a flash poll waits for
+ * it. Polling a few times per erase instead of a thousand keeps the bus
+ * effectively free, and costs only a few ms of extra latency noticing that an
+ * erase has finished. */
+#define SPI23_YIELD_TICKS   3
+
+static IRAM_ATTR esp_err_t spi23_flash_os_yield(void *arg, uint32_t* out_status)
+{
+    esp_err_t ret = release_spi_bus_lock_only(arg);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    if (likely(xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)) {
+        vTaskDelay(SPI23_YIELD_TICKS);
+    }
+
+    return acquire_spi_bus_lock_only(arg);
 }
 
 static IRAM_ATTR esp_err_t spi1_start(void *arg)
@@ -226,8 +310,8 @@ static const esp_flash_os_functions_t esp_flash_spi23_default_os_functions = {
     .get_temp_buffer = get_buffer_malloc,
     .release_temp_buffer = release_buffer_malloc,
     .region_protected = NULL,
-    .check_yield = NULL,
-    .yield = NULL,
+    .check_yield = spi23_flash_os_check_yield,
+    .yield = spi23_flash_os_yield,
 };
 
 static spi_bus_lock_dev_handle_t register_dev(int host_id)

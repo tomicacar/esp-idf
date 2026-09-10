@@ -41,6 +41,17 @@
 
 static const char TAG[] = "spi_flash";
 
+/* SmartSense: on a bus shared with other devices the chunk size decides how
+ * long a single transfer keeps the bus. An external chip is attached without
+ * DMA, so one chunk goes out as a run of 64 byte commands - a 4 KB chunk
+ * measured 13 ms on SPI3 at 10 MHz. The SC16IS752 feeding the 4G modem holds
+ * 64 bytes, about 5.5 ms at 115200, so a chunk that big guarantees dropped
+ * bytes. 512 B keeps one transfer near 1.6 ms, so a single missed poll of the
+ * FIFO still leaves headroom. Only chips other than the main one are capped -
+ * the main flash has the bus to itself. */
+#define EXT_CHUNK_LIMIT 512
+#define CHUNK_LIMIT(chip, base) \
+    (((chip) != esp_flash_default_chip && (base) > EXT_CHUNK_LIMIT) ? EXT_CHUNK_LIMIT : (base))
 #ifdef CONFIG_SPI_FLASH_WRITE_CHUNK_SIZE
 #define MAX_WRITE_CHUNK CONFIG_SPI_FLASH_WRITE_CHUNK_SIZE /* write in chunks */
 #else
@@ -823,7 +834,7 @@ esp_err_t IRAM_ATTR esp_flash_read(esp_flash_t *chip, void *buffer, uint32_t add
 
     //each time, we at most read this length
     //after that, we release the lock to allow some other operations
-    size_t read_chunk_size = MIN(MAX_READ_CHUNK, length);
+    size_t read_chunk_size = MIN(CHUNK_LIMIT(chip, MAX_READ_CHUNK), length);
 
     if (!direct_read) {
         size_t actual_len = 0;
@@ -902,7 +913,7 @@ esp_err_t IRAM_ATTR esp_flash_write(esp_flash_t *chip, const void *buffer, uint3
         const void *write_buf;
         uint32_t temp_buf[8];
         if (direct_write) {
-            write_len = MIN(len_remain, MAX_WRITE_CHUNK);
+            write_len = MIN(len_remain, CHUNK_LIMIT(chip, MAX_WRITE_CHUNK));
             write_buf = buffer;
         } else {
             write_len = MIN(len_remain, sizeof(temp_buf));
