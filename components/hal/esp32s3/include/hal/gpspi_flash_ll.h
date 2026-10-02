@@ -208,8 +208,17 @@ static inline void gpspi_flash_ll_read_phase(spi_dev_t *dev)
  */
 static inline void gpspi_flash_ll_set_cs_pin(spi_dev_t *dev, int pin)
 {
+    // SmartSense: disable every other CS like spi_ll_master_select_cs() does. Clearing
+    // only cs0/cs1 left cs2 enabled after a spi_master transfer to a CS2 device, so that
+    // device also received the flash commands (a sector erase rewrote its registers).
     dev->misc.cs0_dis = (pin == 0) ? 0 : 1;
     dev->misc.cs1_dis = (pin == 1) ? 0 : 1;
+    dev->misc.cs2_dis = (pin == 2) ? 0 : 1;
+    if (dev == &GPSPI2) {
+        dev->misc.cs3_dis = (pin == 3) ? 0 : 1;
+        dev->misc.cs4_dis = (pin == 4) ? 0 : 1;
+        dev->misc.cs5_dis = (pin == 5) ? 0 : 1;
+    }
 }
 
 /**
